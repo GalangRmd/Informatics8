@@ -1,0 +1,608 @@
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Plus, X, Instagram, Calendar, IdCard, User, Trash2, Edit2, Save, AlertTriangle, Loader2, Upload } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
+import { uploadImage } from '../utils/cloudinaryConfig'
+
+// Initial members data
+const initialMembersList = [
+    "Adi Tiya Yudha Peratama", "Arpi Samsul Anwar", "Bina Muhammad",
+    "Christian Imanuel Ringu Langu", "Danendra Saputra", "David Riko Setiawan", "Erick Eka Prasetya",
+    "Fakhri Sofyan", "Firli Fadilah Firdaus", "Galang Ramadhan", "Ghildan Nafhan Ramadhan",
+    "Hagi Algi Ziad", "Hiqmal Fajryan Anwar", "Kelvin Rafael Suchyarwan", "Ksatria Faikar Nasywaan",
+    "M Rafly Aryanu", "Mas Syahid Kanzul Arasy", "Muhammad Zhafir Rifqiansyah", "Naila Murni Cahyani",
+    "Omar Abdullah Ali Ahmed", "Raafli Akbarfebruansyah Muchtar", "Rakha Zaidan Rizqulloh",
+    "Rangga Syatir Heriza", "Rayhan Zulfikar Putra Pamungkas", "Refi Anggana Afrianto",
+    "Revan Kurniawan", "Ridwan Farid Maulana", "Rifqi Athallah", "Ripan Maulana Suhur",
+    "Risma Ayu Khadijah", "Rizky Fernando", "Rycko Fathur Octavian Sakti Arizona",
+    "Sandy Dwi Cahyo Nugroho", "Sayyid Azfa Rasikh Dyani", "Sebastian Fikran Alhanif",
+    "Tazkiya Fitriya", "Thifal Ghailan Baihaqi", "Wilda Khoeirul Anam", "Yoana Briliant Maharani",
+    "Yusuf Rizqi Aulia", "Zahratul Jannah Afnur"
+]
+
+const Members = () => {
+    // Sort helper
+    const sortMembers = (list) => {
+        return [...list].sort((a, b) => a.name.localeCompare(b.name))
+    }
+
+    // Load data from localStorage or initialize (Lazy State Initialization)
+    const [members, setMembers] = useState(() => {
+        const storedMembers = localStorage.getItem('informatics8_members')
+        if (storedMembers) {
+            return sortMembers(JSON.parse(storedMembers))
+        } else {
+            const initialData = initialMembersList.map((name, index) => ({
+                id: `member-${index}-${Date.now()}`,
+                name,
+                photo: '',
+                nim: '-',
+                dob: '-',
+                instagram: ''
+            }))
+            // Initial sort just in case the list wasn't sorted
+            const sortedInitial = sortMembers(initialData)
+            localStorage.setItem('informatics8_members', JSON.stringify(sortedInitial))
+            return sortedInitial
+        }
+    })
+
+    const [selectedMember, setSelectedMember] = useState(null)
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+    const auth = useAuth()
+    // Safely access isAdmin in case auth context is missing or loading
+    const isAdmin = auth?.isAdmin || false
+
+    // Update localStorage when members change
+    useEffect(() => {
+        if (members.length > 0) {
+            localStorage.setItem('informatics8_members', JSON.stringify(members))
+        }
+    }, [members])
+
+    const handleAddMember = (newMember) => {
+        const updatedList = sortMembers([...members, newMember])
+        setMembers(updatedList)
+        setIsAddModalOpen(false)
+    }
+
+    const handleDeleteMember = (id) => {
+        const updatedMembers = members.filter(m => m.id !== id)
+        setMembers(updatedMembers)
+        setSelectedMember(null)
+        localStorage.setItem('informatics8_members', JSON.stringify(updatedMembers))
+    }
+
+    const handleUpdateMember = (updatedMember) => {
+        let updatedMembers = members.map(m => m.id === updatedMember.id ? updatedMember : m)
+        updatedMembers = sortMembers(updatedMembers)
+        setMembers(updatedMembers)
+        setSelectedMember(updatedMember)
+    }
+
+    return (
+        <section className="min-h-screen py-20 px-4 md:px-10 relative bg-black" id="members">
+            {/* Background Effects */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-blue-900/10 rounded-full blur-[120px] animate-pulse-slow"></div>
+                <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-purple-900/10 rounded-full blur-[120px] animate-pulse-slow delay-1000"></div>
+            </div>
+
+            <div className="max-w-7xl mx-auto relative z-10">
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.8 }}
+                    viewport={{ once: true }}
+                    className="text-center mb-16 relative"
+                >
+                    <h2 className="text-5xl md:text-6xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 inline-block mb-4">
+                        Our Members
+                    </h2>
+                    <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+                        Meet the diverse and talented individuals that make up Informatics 8.
+                    </p>
+
+                    {/* Admin Add Button */}
+                    {isAdmin && (
+                        <button
+                            onClick={() => setIsAddModalOpen(true)}
+                            className="mt-8 px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full font-medium transition-all flex items-center gap-2 mx-auto"
+                        >
+                            <Plus size={20} />
+                            Add Member
+                        </button>
+                    )}
+                </motion.div>
+
+                <motion.div
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true, margin: "-100px" }}
+                    variants={{
+                        hidden: { opacity: 0 },
+                        visible: {
+                            opacity: 1,
+                            transition: { staggerChildren: 0.05 }
+                        }
+                    }}
+                    className="flex flex-wrap justify-center gap-x-2 gap-y-1 text-center max-w-5xl mx-auto"
+                >
+                    {members.map((member, index) => (
+                        <motion.span
+                            key={member.id}
+                            variants={{
+                                hidden: { opacity: 0, scale: 0 },
+                                visible: {
+                                    opacity: 1,
+                                    scale: 1,
+                                    transition: { type: "spring", stiffness: 300, damping: 20 }
+                                }
+                            }}
+                            whileHover={{ scale: 1.1, originX: 0.5 }}
+                            onClick={() => setSelectedMember(member)}
+                            className="relative group text-white/60 font-medium text-lg md:text-xl tracking-wide hover:text-white transition-colors cursor-pointer inline-block"
+                        >
+                            {member.name}
+
+                            {/* Tooltip */}
+                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1 text-xs font-bold text-white bg-purple-600/30 backdrop-blur-sm rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-lg z-10">
+                                Click to get more information
+                            </span>
+
+                            {index < members.length - 1 && (
+                                <span className="text-purple-500 mx-2">-</span>
+                            )}
+                        </motion.span>
+                    ))}
+                </motion.div>
+            </div>
+
+            {/* Member Detail Modal */}
+            <AnimatePresence>
+                {selectedMember && (
+                    <MemberModal
+                        member={selectedMember}
+                        onClose={() => setSelectedMember(null)}
+                        onDelete={() => handleDeleteMember(selectedMember.id)}
+                        onUpdate={handleUpdateMember}
+                        isAdmin={isAdmin}
+                    />
+                )}
+            </AnimatePresence>
+
+            {/* Add Member Modal */}
+            <AnimatePresence>
+                {isAddModalOpen && (
+                    <AddMemberModal
+                        onClose={() => setIsAddModalOpen(false)}
+                        onAdd={(data) => handleAddMember(data)}
+                    />
+                )}
+            </AnimatePresence>
+        </section>
+    )
+}
+
+const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
+    const [isEditing, setIsEditing] = useState(false)
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+    const [editData, setEditData] = useState({ ...member })
+    const [uploading, setUploading] = useState(false)
+    const [selectedFile, setSelectedFile] = useState(null)
+
+    const handleSave = async () => {
+        try {
+            setUploading(true)
+            let photoUrl = editData.photo
+
+            if (selectedFile) {
+                photoUrl = await uploadImage(selectedFile)
+            }
+
+            onUpdate({ ...editData, photo: photoUrl })
+            setIsEditing(false)
+            setSelectedFile(null)
+        } catch (error) {
+            alert('Failed to update member: ' + error.message)
+        } finally {
+            setUploading(false)
+        }
+    }
+
+    const handleChange = (e) => {
+        setEditData({ ...editData, [e.target.name]: e.target.value })
+    }
+
+    const handleFileChange = (e) => {
+        if (e.target.files && e.target.files[0]) {
+            setSelectedFile(e.target.files[0])
+            // Preview
+            setEditData({ ...editData, photo: URL.createObjectURL(e.target.files[0]) })
+        }
+    }
+
+    // Reset states when member changes
+    useEffect(() => {
+        setIsEditing(false)
+        setShowDeleteConfirm(false)
+        setEditData({ ...member })
+    }, [member])
+
+    return (
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={onClose}
+        >
+            <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl relative"
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Delete Confirmation Overlay */}
+                <AnimatePresence>
+                    {showDeleteConfirm && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 z-20 bg-zinc-900/95 backdrop-blur flex flex-col items-center justify-center p-8 text-center"
+                        >
+                            <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mb-4">
+                                <AlertTriangle size={32} className="text-red-500" />
+                            </div>
+                            <h3 className="text-xl font-bold text-white mb-2">Delete Member?</h3>
+                            <p className="text-zinc-400 mb-6">
+                                Are you sure you want to delete <span className="text-white font-semibold">{member.name}</span>? This action cannot be undone.
+                            </p>
+                            <div className="flex gap-3 w-full">
+                                <button
+                                    onClick={() => setShowDeleteConfirm(false)}
+                                    className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-semibold transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={onDelete}
+                                    className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-semibold transition-colors"
+                                >
+                                    Delete
+                                </button>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Header/Cover */}
+                <div className="h-32 bg-black relative flex items-center justify-center overflow-hidden border-b border-zinc-800">
+                    {/* 3D Text Banner */}
+                    <h1
+                        className="text-5xl font-black italic uppercase tracking-widest glossy-text transform -rotate-6 opacity-90 translate-y-1 relative z-10"
+                    >
+                        Informatics 8
+                    </h1>
+
+                    <button
+                        onClick={onClose}
+                        className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/40 rounded-full text-white transition-colors z-10"
+                    >
+                        <X size={20} />
+                    </button>
+                    {isAdmin && !isEditing && (
+                        <div className="absolute top-4 left-4 flex gap-2 z-10">
+                            <button
+                                onClick={() => setIsEditing(true)}
+                                className="p-2 bg-black/20 hover:bg-black/40 rounded-full text-white transition-colors"
+                            >
+                                <Edit2 size={20} />
+                            </button>
+                            <button
+                                onClick={() => setShowDeleteConfirm(true)}
+                                className="p-2 bg-red-500/80 hover:bg-red-600 rounded-full text-white transition-colors"
+                            >
+                                <Trash2 size={20} />
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                {/* Profile Content */}
+                <div className="px-6 pb-8 -mt-16 text-center">
+                    <div className="relative inline-block">
+                        <div className="w-32 h-32 rounded-full border-4 border-zinc-900 bg-zinc-800 flex items-center justify-center overflow-hidden mb-4 shadow-xl">
+                            {isEditing ? (
+                                <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 group cursor-pointer relative">
+                                    {editData.photo ? (
+                                        <>
+                                            <img src={editData.photo} alt="Preview" className="w-full h-full object-cover opacity-50 group-hover:opacity-30 transition-opacity" />
+                                            <Upload className="absolute text-white opacity-80" size={24} />
+                                        </>
+                                    ) : (
+                                        <Upload className="text-zinc-500" size={24} />
+                                    )}
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleFileChange}
+                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                    />
+                                </div>
+                            ) : (
+                                member.photo ? (
+                                    <img src={member.photo} alt={member.name} className="w-full h-full object-cover" />
+                                ) : (
+                                    <User size={48} className="text-zinc-600" />
+                                )
+                            )}
+                        </div>
+                    </div>
+
+                    {isEditing ? (
+                        <div className="space-y-4 mb-6">
+                            <input
+                                type="text"
+                                name="name"
+                                value={editData.name}
+                                onChange={handleChange}
+                                className="w-full bg-zinc-800 border-none rounded p-2 text-white font-bold text-center text-xl"
+                                placeholder="Name"
+                            />
+                        </div>
+                    ) : (
+                        <>
+                            <h3 className="text-2xl font-bold text-white mb-1">{member.name}</h3>
+                            <p className="text-purple-400 text-sm mb-6">Informatics 8 Member</p>
+                        </>
+                    )}
+
+                    <div className="space-y-4 text-left bg-zinc-950/50 p-6 rounded-xl border border-zinc-800/50">
+                        <div className="flex items-center gap-3 text-zinc-300">
+                            <IdCard size={18} className="text-blue-500" />
+                            <div className="w-full">
+                                <p className="text-xs text-zinc-500 uppercase tracking-wider">NIM</p>
+                                {isEditing ? (
+                                    <input
+                                        type="text"
+                                        name="nim"
+                                        value={editData.nim}
+                                        onChange={handleChange}
+                                        className="w-full bg-zinc-800 rounded p-1 text-white text-sm"
+                                    />
+                                ) : (
+                                    <p className="font-mono">{member.nim || '-'}</p>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 text-zinc-300">
+                            <Calendar size={18} className="text-pink-500" />
+                            <div className="w-full">
+                                <p className="text-xs text-zinc-500 uppercase tracking-wider">Born</p>
+                                {isEditing ? (
+                                    <input
+                                        type="date"
+                                        name="dob"
+                                        value={editData.dob}
+                                        onChange={handleChange}
+                                        className="w-full bg-zinc-800 rounded p-1 text-white text-sm"
+                                    />
+                                ) : (
+                                    <p>{member.dob || '-'}</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {isEditing && (
+                            <div className="flex items-center gap-3 text-zinc-300">
+                                <Instagram size={18} className="text-purple-500" />
+                                <div className="w-full">
+                                    <p className="text-xs text-zinc-500 uppercase tracking-wider">Instagram</p>
+                                    <input
+                                        type="text"
+                                        name="instagram"
+                                        value={editData.instagram}
+                                        onChange={handleChange}
+                                        className="w-full bg-zinc-800 rounded p-1 text-white text-sm"
+                                        placeholder="@username"
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {isEditing ? (
+                        <div className="mt-6 flex gap-2">
+                            <button
+                                onClick={() => setIsEditing(false)}
+                                className="flex-1 py-3 bg-zinc-700 hover:bg-zinc-600 text-white rounded-xl font-semibold transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSave}
+                                disabled={uploading}
+                                className="flex-1 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {uploading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                                {uploading ? 'Saving...' : 'Save'}
+                            </button>
+                        </div>
+                    ) : (
+                        member.instagram && (
+                            <a
+                                href={member.instagram.startsWith('http') ? member.instagram : `https://instagram.com/${member.instagram.replace('@', '')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-6 flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl font-semibold transition-all shadow-lg shadow-purple-900/20"
+                            >
+                                <Instagram size={20} />
+                                Visit Instagram
+                            </a>
+                        )
+                    )}
+                </div>
+            </motion.div>
+        </motion.div >
+    )
+}
+
+const AddMemberModal = ({ onClose, onAdd }) => {
+    const [formData, setFormData] = useState({
+        name: '',
+        nim: '',
+        dob: '',
+        instagram: '',
+        photo: ''
+    })
+    const [uploading, setUploading] = useState(false)
+    const [selectedFile, setSelectedFile] = useState(null)
+
+    const handleSubmit = async (e) => {
+        e.preventDefault()
+        try {
+            setUploading(true)
+            let photoUrl = formData.photo
+
+            if (selectedFile) {
+                photoUrl = await uploadImage(selectedFile)
+            }
+
+            const newMember = {
+                ...formData,
+                photo: photoUrl,
+                id: `member-${Date.now()}`
+            }
+            onAdd(newMember)
+        } catch (error) {
+            alert('Failed to add member: ' + error.message)
+        } finally {
+            setUploading(false)
+        }
+    }
+
+    const handleChange = (e) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value })
+    }
+
+    const handleFileChange = (e) => {
+        if (e.target.files && e.target.files[0]) {
+            setSelectedFile(e.target.files[0])
+            // Just for preview if needed, or update formData.photo with object URL
+            setFormData({ ...formData, photo: URL.createObjectURL(e.target.files[0]) })
+        }
+    }
+
+    return (
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={onClose}
+        >
+            <motion.div
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 20, opacity: 0 }}
+                className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative"
+                onClick={e => e.stopPropagation()}
+            >
+                <button
+                    onClick={onClose}
+                    className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
+                >
+                    <X size={20} />
+                </button>
+
+                <h3 className="text-2xl font-bold text-white mb-6">Add New Member</h3>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="text-sm text-zinc-400 block mb-1">Full Name</label>
+                        <input
+                            required
+                            type="text"
+                            name="name"
+                            value={formData.name}
+                            onChange={handleChange}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                            placeholder="e.g. John Doe"
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-sm text-zinc-400 block mb-1">NIM</label>
+                            <input
+                                type="text"
+                                name="nim"
+                                value={formData.nim}
+                                onChange={handleChange}
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                                placeholder="12345678"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-sm text-zinc-400 block mb-1">Date of Birth</label>
+                            <input
+                                type="date"
+                                name="dob"
+                                value={formData.dob}
+                                onChange={handleChange}
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-sm text-zinc-400 block mb-1">Instagram Username/Link</label>
+                        <input
+                            type="text"
+                            name="instagram"
+                            value={formData.instagram}
+                            onChange={handleChange}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                            placeholder="@username"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="text-sm text-zinc-400 block mb-1">Photo</label>
+                        <div className="relative w-full h-32 bg-zinc-950 border border-zinc-800 rounded-lg flex items-center justify-center overflow-hidden group hover:border-purple-500 transition-colors">
+                            {formData.photo ? (
+                                <img src={formData.photo} alt="Preview" className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="flex flex-col items-center text-zinc-500">
+                                    <Upload size={24} className="mb-2" />
+                                    <span className="text-xs">Click to upload</span>
+                                </div>
+                            )}
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleFileChange}
+                                className="absolute inset-0 opacity-0 cursor-pointer"
+                            />
+                        </div>
+                    </div>
+
+                    <button
+                        type="submit"
+                        disabled={uploading}
+                        className="w-full py-3 mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-lg font-bold transition-all shadow-lg shadow-purple-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                        {uploading && <Loader2 size={20} className="animate-spin" />}
+                        {uploading ? 'Uploading...' : 'Save Member'}
+                    </button>
+                </form>
+            </motion.div>
+        </motion.div>
+    )
+}
+
+export default Members
