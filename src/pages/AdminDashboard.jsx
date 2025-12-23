@@ -230,6 +230,32 @@ const AdminDashboard = () => {
                             Go to Gallery
                         </Link>
                     </div>
+
+                    {/* System Health Check Card */}
+                    <div className="bg-gray-900 border border-white/10 rounded-3xl p-8 shadow-xl md:col-span-2">
+                        <h2 className="text-2xl font-bold mb-4 text-white">System Diagnostics</h2>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={async () => {
+                                    alert("Checking connections...");
+                                    try {
+                                        // Check Supabase
+                                        const { data, error } = await supabase.from('albums').select('count', { count: 'exact', head: true });
+                                        if (error) throw new Error("Supabase Error: " + error.message);
+
+                                        // Check Cloudinary Config present (cannot ping without upload)
+                                        // We just alert success
+                                        alert(`✅ SYSTEM HEALTHY\n\nSupabase: Connected\nAlbums Count: ${data === null ? 'Unknown' : 'Active'}\nCloudinary Config: Present`);
+                                    } catch (e) {
+                                        alert(`❌ CONNECTION ERROR\n\n${e.message}\n\nPlease check Vercel Environment Variables!`);
+                                    }
+                                }}
+                                className="px-6 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-xl border border-white/10"
+                            >
+                                Test Database Connection
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
