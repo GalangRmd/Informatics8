@@ -4,22 +4,30 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
-    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const { login } = useAuth();
     const navigate = useNavigate();
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        setIsLoading(true);
         setError('');
 
-        // Try logging in
-        if (login(username, password)) {
-            navigate('/');
-        } else {
-            setError('Invalid username or password');
-            setPassword('');
+        try {
+            const result = await login(email, password);
+            if (result.success) {
+                navigate('/');
+            } else {
+                setError(result.error || 'Invalid email or password');
+            }
+        } catch (err) {
+            console.error("Login unexpected error:", err);
+            setError("Unexpected error occurred");
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -46,15 +54,16 @@ const Login = () => {
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
                         <input
-                            type="text"
-                            value={username}
+                            type="email"
+                            value={email}
                             onChange={(e) => {
-                                setUsername(e.target.value);
+                                setEmail(e.target.value);
                                 setError('');
                             }}
-                            placeholder="Username"
+                            placeholder="Email Address"
                             className="w-full bg-black/30 text-white rounded-xl px-4 py-4 mb-4 border border-white/10 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-gray-500 text-center text-lg tracking-widest"
                             autoFocus
+                            disabled={isLoading}
                         />
                         <input
                             type="password"
@@ -65,6 +74,7 @@ const Login = () => {
                             }}
                             placeholder="Password"
                             className="w-full bg-black/30 text-white rounded-xl px-4 py-4 border border-white/10 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-gray-500 text-center text-lg tracking-widest"
+                            disabled={isLoading}
                         />
                         {error && (
                             <motion.p
@@ -78,12 +88,13 @@ const Login = () => {
                     </div>
 
                     <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
+                        whileHover={{ scale: isLoading ? 1 : 1.02 }}
+                        whileTap={{ scale: isLoading ? 1 : 0.98 }}
                         type="submit"
-                        className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-xl font-bold shadow-lg shadow-blue-500/25 transition-all text-lg"
+                        disabled={isLoading}
+                        className={`w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-bold shadow-lg shadow-blue-500/25 transition-all text-lg ${isLoading ? 'opacity-70 cursor-not-allowed' : 'hover:from-blue-500 hover:to-purple-500'}`}
                     >
-                        Login
+                        {isLoading ? 'Logging in...' : 'Login'}
                     </motion.button>
                 </form>
 

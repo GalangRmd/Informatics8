@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, X, Instagram, Calendar, IdCard, User, Trash2, Edit2, Save, AlertTriangle, Loader2, Upload } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { uploadImage } from '../utils/cloudinaryConfig'
+import { supabase } from '../lib/supabaseClient'
 
-// Initial members data
+// Initial members data (kept for reference or fallback, but actual seeding uses utils/seedMembers.js)
 const initialMembersList = [
     "Adi Tiya Yudha Peratama", "Arpi Samsul Anwar", "Bina Muhammad",
     "Christian Imanuel Ringu Langu", "Danendra Saputra", "David Riko Setiawan", "Erick Eka Prasetya",
@@ -26,58 +27,92 @@ const Members = () => {
         return [...list].sort((a, b) => a.name.localeCompare(b.name))
     }
 
-    // Load data from localStorage or initialize (Lazy State Initialization)
-    const [members, setMembers] = useState(() => {
-        const storedMembers = localStorage.getItem('informatics8_members')
-        if (storedMembers) {
-            return sortMembers(JSON.parse(storedMembers))
-        } else {
-            const initialData = initialMembersList.map((name, index) => ({
-                id: `member-${index}-${Date.now()}`,
-                name,
-                photo: '',
-                nim: '-',
-                dob: '-',
-                instagram: ''
-            }))
-            // Initial sort just in case the list wasn't sorted
-            const sortedInitial = sortMembers(initialData)
-            localStorage.setItem('informatics8_members', JSON.stringify(sortedInitial))
-            return sortedInitial
-        }
-    })
-
+    const [members, setMembers] = useState([])
+    const [isLoading, setIsLoading] = useState(true)
     const [selectedMember, setSelectedMember] = useState(null)
     const [isAddModalOpen, setIsAddModalOpen] = useState(false)
     const auth = useAuth()
-    // Safely access isAdmin in case auth context is missing or loading
     const isAdmin = auth?.isAdmin || false
 
-    // Update localStorage when members change
-    useEffect(() => {
-        if (members.length > 0) {
-            localStorage.setItem('informatics8_members', JSON.stringify(members))
+    const fetchMembers = async () => {
+        try {
+            setIsLoading(true)
+            const { data, error } = await supabase
+                .from('members')
+                .select('*')
+                .order('name', { ascending: true })
+
+            if (error) throw error
+            setMembers(data || [])
+        } catch (error) {
+            console.error('Error fetching members:', error.message)
+        } finally {
+            setIsLoading(false)
         }
-    }, [members])
-
-    const handleAddMember = (newMember) => {
-        const updatedList = sortMembers([...members, newMember])
-        setMembers(updatedList)
-        setIsAddModalOpen(false)
     }
 
-    const handleDeleteMember = (id) => {
-        const updatedMembers = members.filter(m => m.id !== id)
-        setMembers(updatedMembers)
-        setSelectedMember(null)
-        localStorage.setItem('informatics8_members', JSON.stringify(updatedMembers))
+    // Initial fetch
+    useEffect(() => {
+        fetchMembers()
+    }, [])
+
+    const handleAddMember = async (newMemberBackend) => {
+        try {
+            const { data, error } = await supabase
+                .from('members')
+                .insert([newMemberBackend])
+                .select()
+
+            if (error) throw error
+
+            if (data) {
+                setMembers(sortMembers([...members, data[0]]))
+                setIsAddModalOpen(false)
+            }
+        } catch (error) {
+            alert('Error adding member: ' + error.message)
+        }
     }
 
-    const handleUpdateMember = (updatedMember) => {
-        let updatedMembers = members.map(m => m.id === updatedMember.id ? updatedMember : m)
-        updatedMembers = sortMembers(updatedMembers)
-        setMembers(updatedMembers)
-        setSelectedMember(updatedMember)
+    const handleDeleteMember = async (id) => {
+        try {
+            const { error } = await supabase
+                .from('members')
+                .delete()
+                .eq('id', id)
+
+            if (error) throw error
+
+            const updatedMembers = members.filter(m => m.id !== id)
+            setMembers(updatedMembers)
+            setSelectedMember(null)
+        } catch (error) {
+            alert('Error deleting member: ' + error.message)
+        }
+    }
+
+    const handleUpdateMember = async (updatedMember) => {
+        try {
+            const { error } = await supabase
+                .from('members')
+                .update({
+                    name: updatedMember.name,
+                    nim: updatedMember.nim,
+                    dob: updatedMember.dob,
+                    instagram: updatedMember.instagram,
+                    photo: updatedMember.photo
+                })
+                .eq('id', updatedMember.id)
+
+            if (error) throw error
+
+            let updatedMembers = members.map(m => m.id === updatedMember.id ? updatedMember : m)
+            updatedMembers = sortMembers(updatedMembers)
+            setMembers(updatedMembers)
+            setSelectedMember(updatedMember)
+        } catch (error) {
+            alert('Error updating member: ' + error.message)
+        }
     }
 
     return (
@@ -105,13 +140,22 @@ const Members = () => {
 
                     {/* Admin Add Button */}
                     {isAdmin && (
-                        <button
-                            onClick={() => setIsAddModalOpen(true)}
-                            className="mt-8 px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full font-medium transition-all flex items-center gap-2 mx-auto"
-                        >
-                            <Plus size={20} />
-                            Add Member
-                        </button>
+                        <div className="flex justify-center gap-4 mt-8">
+                            <button
+                                onClick={() => setIsAddModalOpen(true)}
+                                className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full font-medium transition-all flex items-center gap-2"
+                            >
+                                <Plus size={20} />
+                                Add Member
+                            </button>
+                            <button
+                                onClick={() => import('../utils/seedMembers').then(m => m.seedMembers())}
+                                className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-full font-medium transition-all flex items-center gap-2"
+                            >
+                                <Save size={20} />
+                                Seed Database (Initial)
+                            </button>
+                        </div>
                     )}
                 </motion.div>
 
@@ -128,7 +172,14 @@ const Members = () => {
                     }}
                     className="flex flex-wrap justify-center gap-x-2 gap-y-1 text-center max-w-5xl mx-auto"
                 >
-                    {members.map((member, index) => (
+                    {isLoading && (
+                        <div className="flex flex-col items-center justify-center w-full py-20">
+                            <Loader2 className="w-12 h-12 text-purple-500 animate-spin mb-4" />
+                            <p className="text-gray-400">Loading members...</p>
+                        </div>
+                    )}
+
+                    {!isLoading && members.map((member, index) => (
                         <motion.span
                             key={member.id}
                             variants={{
@@ -474,8 +525,8 @@ const AddMemberModal = ({ onClose, onAdd }) => {
 
             const newMember = {
                 ...formData,
-                photo: photoUrl,
-                id: `member-${Date.now()}`
+                photo: photoUrl
+                // ID handled by Supabase
             }
             onAdd(newMember)
         } catch (error) {
