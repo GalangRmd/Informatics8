@@ -22,9 +22,15 @@ const Gallery = () => {
     // Initial load
     useEffect(() => {
         const loadAlbums = async () => {
-            // Sync stats first to ensure old "X Items" strings are migrated
-            await syncAllAlbumStats();
-            setAlbums(getAlbums());
+            try {
+                // Sync stats first to ensure old "X Items" strings are migrated
+                await syncAllAlbumStats();
+                const fetchedAlbums = await getAlbums();
+                setAlbums(fetchedAlbums || []);
+            } catch (error) {
+                console.error("Failed to load albums:", error);
+                // Optional: setAlbums([]) if needed, but state init is []
+            }
         };
         loadAlbums();
     }, []);
