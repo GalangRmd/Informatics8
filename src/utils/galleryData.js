@@ -19,7 +19,7 @@ export const getAlbums = async () => {
 
     // Map to match frontend expectations if necessary
     // Frontend expects: id, title, cover, count (string), stats object
-    return data.map(album => ({
+    return (data || []).map(album => ({
         ...album,
         cover: album.cover_url || 'https://placehold.co/600x400/1e293b/475569?text=No+Cover',
         count: '0 Items', // We'll calculate this or add a view later if needed. For now simple.
@@ -76,7 +76,7 @@ export const getAlbumMedia = async (albumId) => {
         return [];
     }
 
-    return data.map(item => ({
+    return (data || []).map(item => ({
         id: item.id,
         src: item.url,
         type: item.type,
