@@ -12,6 +12,9 @@ const Login = () => {
 
     const handleSubmit = (e) => {
         e.preventDefault();
+        setError('');
+
+        // Try logging in
         if (login(username, password)) {
             navigate('/');
         } else {
