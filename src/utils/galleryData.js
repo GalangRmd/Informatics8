@@ -7,9 +7,11 @@ import { uploadMedia } from './cloudinaryConfig';
 // --- ALBUMS ---
 
 export const getAlbums = async () => {
+    // Fetch albums with their photos (only type needed for stats)
     const { data, error } = await supabase
         .from('albums')
-        .select('*')
+        // Order albums by newest, and internally order photos (optional but good for consistency)
+        .select('*, photos(type)')
         .order('created_at', { ascending: false });
 
     if (error) {
@@ -17,14 +19,20 @@ export const getAlbums = async () => {
         return [];
     }
 
-    // Map to match frontend expectations if necessary
-    // Frontend expects: id, title, cover, count (string), stats object
-    return (data || []).map(album => ({
-        ...album,
-        cover: album.cover_url || 'https://placehold.co/600x400/1e293b/475569?text=No+Cover',
-        count: '0 Items', // We'll calculate this or add a view later if needed. For now simple.
-        stats: { photos: 0, videos: 0 } // Todo: join count logic
-    }));
+    // Map to match frontend expectations
+    return (data || []).map(album => {
+        // Calculate counts from the joined photos array
+        const photoCount = (album.photos || []).filter(p => p.type === 'image').length;
+        const videoCount = (album.photos || []).filter(p => p.type === 'video').length;
+        const totalCount = photoCount + videoCount;
+
+        return {
+            ...album,
+            cover: album.cover_url || 'https://placehold.co/600x400/1e293b/475569?text=No+Cover',
+            count: `${totalCount} Items`,
+            stats: { photos: photoCount, videos: videoCount }
+        };
+    });
 };
 
 export const addAlbum = async (albumData) => {
