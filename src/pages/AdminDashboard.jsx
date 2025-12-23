@@ -1,83 +1,90 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabaseClient';
 
 const AdminDashboard = () => {
-    const { currentUser, changePassword, addUser, deleteUser, getAllUsers, logout } = useAuth();
+    const { currentUser, logout, loading, signup } = useAuth();
     const navigate = useNavigate();
-
-    // Change Password State
-    const [newPass, setNewPass] = useState('');
-    const [confirmPass, setConfirmPass] = useState('');
-    const [passMsg, setPassMsg] = useState({ type: '', text: '' });
-
-    // Add User State
-    const [newUserUser, setNewUserUser] = useState('');
-    const [newUserPass, setNewUserPass] = useState('');
-    const [userMsg, setUserMsg] = useState({ type: '', text: '' });
-
-    // List Users State
-    const [users, setUsers] = useState(getAllUsers());
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
+    // Add Admin State
+    const [newAdminEmail, setNewAdminEmail] = useState('');
+    const [newAdminPass, setNewAdminPass] = useState('');
+    const [adminMsg, setAdminMsg] = useState({ type: '', text: '' });
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Redirect if not logged in
+    // Admin List State
+    const [admins, setAdmins] = useState([]);
+    const [loadingAdmins, setLoadingAdmins] = useState(true);
+
+    const fetchAdmins = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            setAdmins(data || []);
+        } catch (error) {
+            console.error("Error fetching admins:", error.message);
+        } finally {
+            setLoadingAdmins(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchAdmins();
+    }, []);
+
+    // Show loading or redirect
+    if (loading) {
+        return <div className="min-h-screen bg-black text-white flex items-center justify-center">Loading...</div>;
+    }
+
     if (!currentUser) {
-        navigate('/');
+        navigate('/login');
         return null;
     }
 
-    // ... (existing handlers)
-
-
-
-    const handleChangePassword = (e) => {
-        e.preventDefault();
-        if (newPass !== confirmPass) {
-            setPassMsg({ type: 'error', text: 'Passwords do not match' });
-            return;
-        }
-        if (newPass.length < 4) {
-            setPassMsg({ type: 'error', text: 'Password too short' });
-            return;
-        }
-        changePassword(currentUser.username, newPass);
-        setPassMsg({ type: 'success', text: 'Password updated successfully!' });
-        setNewPass('');
-        setConfirmPass('');
-        // Refresh users list if needed
-        setUsers(getAllUsers());
+    const handleLogout = async () => {
+        await logout();
+        navigate('/');
     };
 
-    const handleAddUser = (e) => {
+    const handleAddAdmin = async (e) => {
         e.preventDefault();
-        if (!newUserUser || !newUserPass) return;
+        setIsSubmitting(true);
+        setAdminMsg({ type: '', text: '' });
+
+        if (newAdminPass.length < 6) {
+            setAdminMsg({ type: 'error', text: 'Password must be at least 6 characters' });
+            setIsSubmitting(false);
+            return;
+        }
+
         try {
-            addUser(newUserUser, newUserPass);
-            setUserMsg({ type: 'success', text: `User ${newUserUser} created!` });
-            setNewUserUser('');
-            setNewUserPass('');
-            setUsers(getAllUsers());
-        } catch (error) {
-            setUserMsg({ type: 'error', text: error.message });
-        }
-    };
-
-    const handleDeleteUser = (username) => {
-        if (window.confirm(`Delete user "${username}"?`)) {
-            try {
-                deleteUser(username);
-                setUsers(getAllUsers());
-            } catch (error) {
-                alert(error.message);
+            const result = await signup(newAdminEmail, newAdminPass);
+            if (result.success) {
+                setAdminMsg({ type: 'success', text: `Admin account created for ${newAdminEmail}!` });
+                setNewAdminEmail('');
+                setNewAdminPass('');
+                fetchAdmins(); // Refresh list
+            } else {
+                setAdminMsg({ type: 'error', text: result.error });
             }
+        } catch (error) {
+            setAdminMsg({ type: 'error', text: 'An unexpected error occurred' });
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
     return (
         <div className="min-h-screen bg-black text-white p-6 md:p-12 relative overflow-hidden">
-            {/* Background elements similar to other pages */}
+            {/* Background elements */}
             <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
                 <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[120px]"></div>
             </div>
@@ -95,9 +102,9 @@ const AdminDashboard = () => {
                         </Link>
                         <div>
                             <h1 className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
-                                Dashboard
+                                Admin Dashboard
                             </h1>
-                            <p className="text-gray-400">Welcome, <span className="text-white font-bold">{currentUser.username}</span></p>
+                            <p className="text-gray-400">Welcome, <span className="text-white font-bold">{currentUser.email || currentUser.username}</span></p>
                         </div>
                     </div>
 
@@ -112,106 +119,116 @@ const AdminDashboard = () => {
                     </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* Change Password Card */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                    {/* Add New Admin Card */}
                     <div className="bg-gray-900 border border-white/10 rounded-3xl p-8 shadow-xl">
                         <h2 className="text-2xl font-bold mb-6 text-white flex items-center gap-3">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                             </svg>
-                            Change My Password
+                            Add New Admin
                         </h2>
-                        <form onSubmit={handleChangePassword} className="space-y-4">
+
+                        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 mb-6">
+                            <p className="text-yellow-200 text-sm">
+                                ⚠️ <strong>Note:</strong> Adding a new admin will create a new account in the database.
+                                Depending on Supabase settings, a confirmation email might be sent.
+                            </p>
+                        </div>
+
+                        <form onSubmit={handleAddAdmin} className="space-y-4">
                             <input
-                                type="password"
-                                placeholder="New Password"
-                                value={newPass}
-                                onChange={e => setNewPass(e.target.value)}
-                                className="w-full bg-black/30 rounded-xl px-4 py-3 border border-white/10 focus:border-blue-500 outline-none transition-colors"
+                                type="email"
+                                placeholder="New Admin Email"
+                                value={newAdminEmail}
+                                onChange={e => setNewAdminEmail(e.target.value)}
+                                className="w-full bg-black/30 rounded-xl px-4 py-3 border border-white/10 focus:border-green-500 outline-none transition-colors text-white"
+                                required
                             />
                             <input
                                 type="password"
-                                placeholder="Confirm New Password"
-                                value={confirmPass}
-                                onChange={e => setConfirmPass(e.target.value)}
-                                className="w-full bg-black/30 rounded-xl px-4 py-3 border border-white/10 focus:border-blue-500 outline-none transition-colors"
+                                placeholder="Password (min 6 chars)"
+                                value={newAdminPass}
+                                onChange={e => setNewAdminPass(e.target.value)}
+                                className="w-full bg-black/30 rounded-xl px-4 py-3 border border-white/10 focus:border-green-500 outline-none transition-colors text-white"
+                                required
+                                minLength={6}
                             />
-                            {passMsg.text && (
-                                <p className={`text-sm ${passMsg.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>
-                                    {passMsg.text}
-                                </p>
-                            )}
-                            <button className="w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-xl font-bold transition-colors">
-                                Update Password
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className={`w-full py-3 bg-green-600 hover:bg-green-700 rounded-xl font-bold transition-all shadow-lg shadow-green-500/20 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                                {isSubmitting ? 'Creating...' : 'Create Admin'}
                             </button>
                         </form>
+                        {adminMsg.text && (
+                            <p className={`mt-4 text-sm font-medium ${adminMsg.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>
+                                {adminMsg.text}
+                            </p>
+                        )}
                     </div>
 
-                    {/* Manage Users Card */}
-                    <div className="bg-gray-900 border border-white/10 rounded-3xl p-8 shadow-xl">
+                    {/* Admin List Card */}
+                    <div className="bg-gray-900 border border-white/10 rounded-3xl p-8 shadow-xl flex flex-col">
                         <h2 className="text-2xl font-bold mb-6 text-white flex items-center gap-3">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                             </svg>
-                            Manage Admins
+                            Admin List
                         </h2>
 
-                        {/* Add User Form */}
-                        <form onSubmit={handleAddUser} className="mb-8 p-4 bg-white/5 rounded-2xl border border-white/5">
-                            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Add New Admin</h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                                <input
-                                    type="text"
-                                    placeholder="Username"
-                                    value={newUserUser}
-                                    onChange={e => setNewUserUser(e.target.value)}
-                                    className="bg-black/30 rounded-lg px-3 py-2 border border-white/10 focus:border-purple-500 outline-none text-sm"
-                                />
-                                <input
-                                    type="password"
-                                    placeholder="Password"
-                                    value={newUserPass}
-                                    onChange={e => setNewUserPass(e.target.value)}
-                                    className="bg-black/30 rounded-lg px-3 py-2 border border-white/10 focus:border-purple-500 outline-none text-sm"
-                                />
-                            </div>
-                            {userMsg.text && (
-                                <p className={`text-xs mb-3 ${userMsg.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>
-                                    {userMsg.text}
-                                </p>
-                            )}
-                            <button className="w-full py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-bold text-sm transition-colors">
-                                Create Account
-                            </button>
-                        </form>
-
-                        {/* User List */}
-                        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                            {users.map(user => (
-                                <div key={user.username} className="flex justify-between items-center p-3 bg-black/20 rounded-xl border border-white/5">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-xs font-bold">
-                                            {user.username[0].toUpperCase()}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 max-h-[300px]">
+                            {loadingAdmins ? (
+                                <p className="text-gray-500 text-center py-4">Loading list...</p>
+                            ) : admins.length === 0 ? (
+                                <p className="text-gray-500 text-center py-4">No admins found (Requires 'profiles' table).</p>
+                            ) : (
+                                <div className="space-y-3">
+                                    {admins.map((admin) => (
+                                        <div key={admin.id} className="flex items-center gap-4 p-3 bg-black/20 rounded-xl border border-white/5">
+                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center font-bold text-sm">
+                                                {admin.email ? admin.email[0].toUpperCase() : 'A'}
+                                            </div>
+                                            <div className="overflow-hidden">
+                                                <p className="font-medium truncate text-sm">{admin.email}</p>
+                                                <p className="text-xs text-gray-500">Joined: {new Date(admin.created_at).toLocaleDateString()}</p>
+                                            </div>
                                         </div>
-                                        <span className="font-medium">{user.username}</span>
-                                        {user.username === currentUser.username && (
-                                            <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full">You</span>
-                                        )}
-                                    </div>
-                                    {users.length > 1 && (
-                                        <button
-                                            onClick={() => handleDeleteUser(user.username)}
-                                            className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
-                                            title="Delete User"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                                            </svg>
-                                        </button>
-                                    )}
+                                    ))}
                                 </div>
-                            ))}
+                            )}
                         </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Access Members Card */}
+                    <div className="bg-gray-900 border border-white/10 rounded-3xl p-8 shadow-xl hover:border-blue-500/30 transition-all group">
+                        <h2 className="text-2xl font-bold mb-4 text-white flex items-center gap-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-blue-400 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            Manage Members
+                        </h2>
+                        <p className="text-gray-400 mb-6">Add, edit, or remove class members from the database.</p>
+                        <Link to="/" className="inline-block w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-xl font-bold transition-colors text-center">
+                            Go to Member List
+                        </Link>
+                    </div>
+
+                    {/* Access Gallery Card */}
+                    <div className="bg-gray-900 border border-white/10 rounded-3xl p-8 shadow-xl hover:border-purple-500/30 transition-all group">
+                        <h2 className="text-2xl font-bold mb-4 text-white flex items-center gap-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-purple-400 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            Manage Gallery
+                        </h2>
+                        <p className="text-gray-400 mb-6">Upload photos, manage albums, and curate memories.</p>
+                        <Link to="/gallery" className="inline-block w-full py-3 bg-purple-600 hover:bg-purple-700 rounded-xl font-bold transition-colors text-center">
+                            Go to Gallery
+                        </Link>
                     </div>
                 </div>
             </div>
@@ -233,7 +250,6 @@ const AdminDashboard = () => {
                             className="bg-gray-900 border border-white/10 rounded-3xl p-8 max-w-sm w-full shadow-2xl relative overflow-hidden"
                             onClick={e => e.stopPropagation()}
                         >
-                            {/* Decorative background glow */}
                             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-24 bg-red-500/20 blur-[60px] pointer-events-none"></div>
 
                             <div className="relative z-10 text-center">
@@ -260,7 +276,7 @@ const AdminDashboard = () => {
                                     <motion.button
                                         whileHover={{ scale: 1.02, boxShadow: "0 0 20px rgba(239, 68, 68, 0.4)" }}
                                         whileTap={{ scale: 0.98 }}
-                                        onClick={logout}
+                                        onClick={handleLogout}
                                         className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-red-600 to-red-500 text-white font-bold transition-all shadow-lg shadow-red-500/30"
                                     >
                                         Logout Now

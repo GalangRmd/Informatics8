@@ -40,6 +40,19 @@ export const AuthProvider = ({ children }) => {
         return { success: true };
     };
 
+    const signup = async (email, password) => {
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+        });
+
+        if (error) {
+            console.error("Signup error:", error.message);
+            return { success: false, error: error.message };
+        }
+        return { success: true, data };
+    };
+
     const logout = async () => {
         const { error } = await supabase.auth.signOut();
         if (error) console.error("Logout error:", error.message);
@@ -50,6 +63,7 @@ export const AuthProvider = ({ children }) => {
             currentUser,
             isAdmin: !!currentUser,
             login,
+            signup,
             logout,
             loading
         }}>
