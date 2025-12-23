@@ -22,8 +22,8 @@ const AlbumView = () => {
     useEffect(() => {
         const loadAlbumData = async () => {
             try {
-                const allAlbums = await getAlbums()
-                const currentAlbum = allAlbums.find(a => a.id === id)
+                const allAlbums = await getAlbums();
+                const currentAlbum = (allAlbums || []).find(a => a.id === id); // Safe check
 
                 if (currentAlbum) {
                     setTitle(currentAlbum.title)
