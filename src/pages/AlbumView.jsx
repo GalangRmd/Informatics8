@@ -22,7 +22,7 @@ const AlbumView = () => {
     useEffect(() => {
         const loadAlbumData = async () => {
             try {
-                const allAlbums = getAlbums()
+                const allAlbums = await getAlbums()
                 const currentAlbum = allAlbums.find(a => a.id === id)
 
                 if (currentAlbum) {
@@ -31,14 +31,7 @@ const AlbumView = () => {
                 }
 
                 // Load Photos based on ID
-                let mediaItems = [];
-                if (id === 'makrab-2025') {
-                    // Try to get from DB first
-                    mediaItems = await getAlbumMedia(id);
-                } else {
-                    // Load custom album media from IndexedDB
-                    mediaItems = await getAlbumMedia(id)
-                }
+                let mediaItems = await getAlbumMedia(id);
 
                 // Safe sort and map
                 const processedPhotos = (mediaItems || [])

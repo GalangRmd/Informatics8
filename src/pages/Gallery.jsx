@@ -38,7 +38,7 @@ const Gallery = () => {
                 count: '0 Photos' // Initial count
             });
             await syncAllAlbumStats(); // Ensure correct zero-state
-            setAlbums(getAlbums());
+            setAlbums(await getAlbums());
             setNewAlbumTitle('');
             setIsModalOpen(false);
         } catch (error) {
@@ -60,7 +60,7 @@ const Gallery = () => {
         if (albumToDelete) {
             deleteAlbum(albumToDelete.id);
             await syncAllAlbumStats();
-            setAlbums(getAlbums());
+            setAlbums(await getAlbums());
             setDeleteModalOpen(false);
             setAlbumToDelete(null);
         }
@@ -87,7 +87,7 @@ const Gallery = () => {
                 date: editingAlbum.date // Keep original date for now, or add date field to edit modal
             });
             await syncAllAlbumStats();
-            setAlbums(getAlbums());
+            setAlbums(await getAlbums());
             setIsEditModalOpen(false);
             setEditingAlbum(null);
             setEditTitle('');

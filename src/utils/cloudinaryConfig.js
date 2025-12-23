@@ -5,11 +5,11 @@ const CLOUD_NAME = 'dlhdcu8sr';
 const UPLOAD_PRESET = 'informatics_upload';
 
 /**
- * Uploads an image file to Cloudinary
+ * Uploads a file (image or video) to Cloudinary
  * @param {File} file - The file object from input type="file"
- * @returns {Promise<string>} - The secure URL of the uploaded image
+ * @returns {Promise<object>} - The full response data (secure_url, resource_type, etc.)
  */
-export const uploadImage = async (file) => {
+export const uploadMedia = async (file) => {
     if (!file) return null;
 
     if (UPLOAD_PRESET === 'REPLACE_WITH_YOUR_PRESET') {
@@ -21,22 +21,37 @@ export const uploadImage = async (file) => {
     formData.append('file', file);
     formData.append('upload_preset', UPLOAD_PRESET);
 
+    // Determine resource type based on file type
+    const resourceType = file.type.startsWith('video') ? 'video' : 'image';
+
     try {
-        const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+        const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`, {
             method: 'POST',
             body: formData
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error?.message || 'Upload failed');
+            let errorMessage = 'Upload failed';
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.error?.message || errorMessage;
+            } catch (e) {
+                errorMessage = await response.text(); // Fallback to text if JSON fails
+            }
+            throw new Error(`Cloudinary Error (${response.status}): ${errorMessage}`);
         }
 
         const data = await response.json();
-        return data.secure_url;
+        return data; // Return full data to get secure_url and resource_type
     } catch (error) {
         console.error('Cloudinary Upload Error:', error);
-        alert('Upload Error: ' + error.message); // Show error to user
+        alert(`UPLOAD FAILED!\n\nCheck your Cloudinary Settings.\n\nError: ${error.message}`);
         throw error;
     }
+};
+
+// Keep for backward compatibility if needed, but alias to new function
+export const uploadImage = async (file) => {
+    const data = await uploadMedia(file);
+    return data.secure_url;
 };
