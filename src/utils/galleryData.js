@@ -129,9 +129,21 @@ export const addMediaToAlbum = async (albumId, fileOrObject) => {
 
         if (error) throw error;
 
-        // Update Album Cover if it's the first photo?
-        // We can do that separately or let user set it. 
-        // For now, let's keep it simple.
+        // Auto-set cover if this is the first photo or no cover exists
+        if (type === 'image') {
+            const { data: album } = await supabase
+                .from('albums')
+                .select('cover_url')
+                .eq('id', albumId)
+                .single();
+
+            if (album && !album.cover_url) {
+                await supabase
+                    .from('albums')
+                    .update({ cover_url: url })
+                    .eq('id', albumId);
+            }
+        }
 
         return data;
 
