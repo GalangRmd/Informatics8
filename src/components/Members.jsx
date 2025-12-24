@@ -242,6 +242,8 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
     const [uploading, setUploading] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
 
+    const [zoom, setZoom] = useState(1)
+
     // Drag/Crop State
     const [dragPos, setDragPos] = useState({ x: 0, y: 0 })
     const [isDragging, setIsDragging] = useState(false)
@@ -250,7 +252,7 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
     const imageRef = useRef(null)
 
     const handleMouseDown = (e) => {
-        if (!isEditing) return
+        if (!isEditing || !selectedFile && !editData.photo) return
         e.preventDefault()
         setIsDragging(true)
         setDragStart({
@@ -274,7 +276,7 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
 
     // Touch support
     const handleTouchStart = (e) => {
-        if (!isEditing) return
+        if (!isEditing || !selectedFile && !editData.photo) return
         const touch = e.touches[0]
         setIsDragging(true)
         setDragStart({
@@ -292,8 +294,15 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
         })
     }
 
+    const handleRemovePhoto = () => {
+        setEditData({ ...editData, photo: '' })
+        setSelectedFile(null)
+        setDragPos({ x: 0, y: 0 })
+        setZoom(1)
+    }
+
     // Crop Image Utility
-    const getCroppedImage = async (sourceUrl, offset) => {
+    const getCroppedImage = async (sourceUrl, offset, zoomVal) => {
         return new Promise((resolve, reject) => {
             const img = new Image()
             img.src = sourceUrl
@@ -305,27 +314,34 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
                 canvas.height = size
                 const ctx = canvas.getContext('2d')
 
-                // We need to calculate how the image was displayed in the 128x128 container
-                // to map the offset correctly.
-                const aspect = img.width / img.height
-
-                // Emulate "object-fit: cover" logic
+                // Calculate render dimensions based on natural size
+                // We emulate the "min-dimension = 100%" logic of our CSS
+                const aspect = img.naturalWidth / img.naturalHeight
                 let renderW, renderH
+
+                // The container is square. We scale the image so its smallest side hits the container size.
+                // But we print to a 300x300 canvas.
                 if (aspect > 1) {
+                    // Wider than tall: Height = size
                     renderH = size
                     renderW = size * aspect
                 } else {
+                    // Taller than wide: Width = size
                     renderW = size
                     renderH = size / aspect
                 }
 
-                // Center the image first
+                // Apply Zoom
+                renderW *= zoomVal
+                renderH *= zoomVal
+
+                // Center relative to canvas
                 let drawX = (size - renderW) / 2
                 let drawY = (size - renderH) / 2
 
-                // Apply the user's drag offset
-                // The drag offset is in pixels relative to the 128px container.
-                // We need to scale that offset to our 300px canvas.
+                // Apply User Translate
+                // User drag is in pixels relative to 128px container
+                // Scale offset to 300px canvas
                 const scaleFactor = size / 128
                 drawX += offset.x * scaleFactor
                 drawY += offset.y * scaleFactor
@@ -345,21 +361,26 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
             setUploading(true)
             let photoUrl = editData.photo
 
-            if (selectedFile) {
-                // If dragged, apply crop
-                if (dragPos.x !== 0 || dragPos.y !== 0) {
-                    const objectUrl = URL.createObjectURL(selectedFile)
-                    const croppedBlob = await getCroppedImage(objectUrl, dragPos)
-                    photoUrl = await uploadImage(croppedBlob)
-                } else {
-                    photoUrl = await uploadImage(selectedFile)
-                }
+            // Re-upload if file changed OR if position/zoom changed
+            const needsCrop = (selectedFile || (editData.photo && editData.photo.startsWith('blob:'))) &&
+                (dragPos.x !== 0 || dragPos.y !== 0 || zoom !== 1)
+
+            // If user removed photo
+            if (!editData.photo && !selectedFile) {
+                photoUrl = ''
             }
+            else if (selectedFile || needsCrop) {
+                const source = selectedFile ? URL.createObjectURL(selectedFile) : editData.photo
+                const croppedBlob = await getCroppedImage(source, dragPos, zoom)
+                photoUrl = await uploadImage(croppedBlob)
+            }
+            // If just updating text and photo is existing URL -> keep it
 
             onUpdate({ ...editData, photo: photoUrl })
             setIsEditing(false)
             setSelectedFile(null)
             setDragPos({ x: 0, y: 0 })
+            setZoom(1)
         } catch (error) {
             alert('Failed to update member: ' + error.message)
         } finally {
@@ -373,9 +394,12 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
 
     const handleFileChange = (e) => {
         if (e.target.files && e.target.files[0]) {
-            setSelectedFile(e.target.files[0])
+            const file = e.target.files[0]
+            setSelectedFile(file)
             // Preview
-            setEditData({ ...editData, photo: URL.createObjectURL(e.target.files[0]) })
+            setEditData({ ...editData, photo: URL.createObjectURL(file) })
+            setDragPos({ x: 0, y: 0 })
+            setZoom(1)
         }
     }
 
@@ -385,6 +409,7 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
         setShowDeleteConfirm(false)
         setEditData({ ...member })
         setDragPos({ x: 0, y: 0 })
+        setZoom(1)
         setSelectedFile(null)
     }, [member])
 
@@ -472,53 +497,97 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
 
                 {/* Profile Content */}
                 <div className="px-6 pb-8 -mt-16 text-center">
-                    <div className="relative inline-block">
-                        <div
-                            className={`w-32 h-32 rounded-full border-4 border-zinc-900 bg-zinc-800 flex items-center justify-center overflow-hidden mb-4 shadow-xl ${isEditing ? 'cursor-move ring-2 ring-purple-500 ring-offset-2 ring-offset-black' : ''}`}
-                            ref={containerRef}
-                            onMouseDown={handleMouseDown}
-                            onMouseMove={handleMouseMove}
-                            onMouseUp={handleMouseUp}
-                            onMouseLeave={handleMouseUp}
-                            onTouchStart={handleTouchStart}
-                            onTouchMove={handleTouchMove}
-                            onTouchEnd={handleMouseUp}
-                        >
-                            {isEditing ? (
-                                <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 group relative">
-                                    {editData.photo ? (
-                                        <>
+                    <div className="flex flex-col items-center">
+                        <div className="relative inline-block group">
+                            <div
+                                className={`w-32 h-32 rounded-full border-4 border-zinc-900 bg-zinc-800 relative overflow-hidden mb-4 shadow-xl ${isEditing && editData.photo ? 'cursor-move ring-2 ring-purple-500 ring-offset-2 ring-offset-black' : ''}`}
+                                ref={containerRef}
+                                onMouseDown={handleMouseDown}
+                                onMouseMove={handleMouseMove}
+                                onMouseUp={handleMouseUp}
+                                onMouseLeave={handleMouseUp}
+                                onTouchStart={handleTouchStart}
+                                onTouchMove={handleTouchMove}
+                                onTouchEnd={handleMouseUp}
+                            >
+                                {isEditing ? (
+                                    <>
+                                        {editData.photo ? (
                                             <img
                                                 ref={imageRef}
                                                 src={editData.photo}
                                                 alt="Preview"
-                                                className="w-full h-full object-cover transition-transform duration-0 pointer-events-none select-none"
-                                                style={{ transform: `translate(${dragPos.x}px, ${dragPos.y}px)` }}
+                                                className="absolute max-w-none pointer-events-none select-none"
+                                                style={{
+                                                    // Start centered, then apply user transforms
+                                                    top: '50%',
+                                                    left: '50%',
+                                                    minWidth: '100%',
+                                                    minHeight: '100%',
+                                                    width: 'auto',
+                                                    height: 'auto',
+                                                    // The key is: translate(-50%, -50%) centers it. Then we add dragPos. Then Scale.
+                                                    transform: `translate(calc(-50% + ${dragPos.x}px), calc(-50% + ${dragPos.y}px)) scale(${zoom})`,
+                                                    objectFit: 'contain' // We rely on minWidth/Height to fill
+                                                }}
+                                                draggable={false}
                                             />
-                                            {!isDragging && (
-                                                <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
-                                                    <div className="bg-black/50 p-1 rounded-full backdrop-blur-sm">
-                                                        <Upload className="text-white opacity-80" size={20} />
-                                                    </div>
-                                                </div>
-                                            )}
+                                        ) : (
+                                            <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500">
+                                                <Upload size={24} />
+                                            </div>
+                                        )}
+
+                                        {/* Hidden Input for Upload - Only active if no photo or if button clicked */}
+                                        {!editData.photo && (
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleFileChange}
+                                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                            />
+                                        )}
+                                    </>
+                                ) : (
+                                    member.photo ? (
+                                        <img src={member.photo} alt={member.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <User size={48} className="text-zinc-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                                    )
+                                )}
+                            </div>
+
+                            {/* Editing Controls Below Photo */}
+                            {isEditing && (
+                                <div className="space-y-3 mb-6 w-full max-w-[200px]">
+                                    {editData.photo ? (
+                                        <>
+                                            {/* Zoom Slider */}
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-zinc-500">Zoom</span>
+                                                <input
+                                                    type="range"
+                                                    min="1"
+                                                    max="3"
+                                                    step="0.05"
+                                                    value={zoom}
+                                                    onChange={e => setZoom(parseFloat(e.target.value))}
+                                                    className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                />
+                                            </div>
+
+                                            {/* Remove Button */}
+                                            <button
+                                                onClick={handleRemovePhoto}
+                                                className="text-xs text-red-400 hover:text-red-300 font-medium flex items-center justify-center gap-1 w-full py-1 bg-red-500/10 rounded"
+                                            >
+                                                <Trash2 size={12} /> Remove Photo
+                                            </button>
                                         </>
                                     ) : (
-                                        <Upload className="text-zinc-500" size={24} />
+                                        <div className="text-xs text-zinc-500">Tap circle to upload</div>
                                     )}
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={handleFileChange}
-                                        className="absolute inset-0 opacity-0 cursor-pointer"
-                                    />
                                 </div>
-                            ) : (
-                                member.photo ? (
-                                    <img src={member.photo} alt={member.name} className="w-full h-full object-cover" />
-                                ) : (
-                                    <User size={48} className="text-zinc-600" />
-                                )
                             )}
                         </div>
                     </div>
