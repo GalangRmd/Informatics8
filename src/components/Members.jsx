@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, X, Instagram, Calendar, IdCard, User, Trash2, Edit2, Save, AlertTriangle, Loader2, Upload } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -242,18 +242,124 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
     const [uploading, setUploading] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
 
+    // Drag/Crop State
+    const [dragPos, setDragPos] = useState({ x: 0, y: 0 })
+    const [isDragging, setIsDragging] = useState(false)
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+    const containerRef = useRef(null)
+    const imageRef = useRef(null)
+
+    const handleMouseDown = (e) => {
+        if (!isEditing) return
+        e.preventDefault()
+        setIsDragging(true)
+        setDragStart({
+            x: e.clientX - dragPos.x,
+            y: e.clientY - dragPos.y
+        })
+    }
+
+    const handleMouseMove = (e) => {
+        if (!isDragging || !isEditing) return
+        e.preventDefault()
+        setDragPos({
+            x: e.clientX - dragStart.x,
+            y: e.clientY - dragStart.y
+        })
+    }
+
+    const handleMouseUp = () => {
+        setIsDragging(false)
+    }
+
+    // Touch support
+    const handleTouchStart = (e) => {
+        if (!isEditing) return
+        const touch = e.touches[0]
+        setIsDragging(true)
+        setDragStart({
+            x: touch.clientX - dragPos.x,
+            y: touch.clientY - dragPos.y
+        })
+    }
+
+    const handleTouchMove = (e) => {
+        if (!isDragging || !isEditing) return
+        const touch = e.touches[0]
+        setDragPos({
+            x: touch.clientX - dragStart.x,
+            y: touch.clientY - dragStart.y
+        })
+    }
+
+    // Crop Image Utility
+    const getCroppedImage = async (sourceUrl, offset) => {
+        return new Promise((resolve, reject) => {
+            const img = new Image()
+            img.src = sourceUrl
+            img.crossOrigin = 'anonymous'
+            img.onload = () => {
+                const canvas = document.createElement('canvas')
+                const size = 300 // Output resolution
+                canvas.width = size
+                canvas.height = size
+                const ctx = canvas.getContext('2d')
+
+                // We need to calculate how the image was displayed in the 128x128 container
+                // to map the offset correctly.
+                const aspect = img.width / img.height
+
+                // Emulate "object-fit: cover" logic
+                let renderW, renderH
+                if (aspect > 1) {
+                    renderH = size
+                    renderW = size * aspect
+                } else {
+                    renderW = size
+                    renderH = size / aspect
+                }
+
+                // Center the image first
+                let drawX = (size - renderW) / 2
+                let drawY = (size - renderH) / 2
+
+                // Apply the user's drag offset
+                // The drag offset is in pixels relative to the 128px container.
+                // We need to scale that offset to our 300px canvas.
+                const scaleFactor = size / 128
+                drawX += offset.x * scaleFactor
+                drawY += offset.y * scaleFactor
+
+                ctx.drawImage(img, drawX, drawY, renderW, renderH)
+
+                canvas.toBlob((blob) => {
+                    resolve(blob)
+                }, 'image/jpeg', 0.9)
+            }
+            img.onerror = reject
+        })
+    }
+
     const handleSave = async () => {
         try {
             setUploading(true)
             let photoUrl = editData.photo
 
             if (selectedFile) {
-                photoUrl = await uploadImage(selectedFile)
+                // If dragged, apply crop
+                if (dragPos.x !== 0 || dragPos.y !== 0) {
+                    const objectUrl = URL.createObjectURL(selectedFile)
+                    const croppedBlob = await getCroppedImage(objectUrl, dragPos)
+                    photoUrl = await uploadImage(croppedBlob)
+                } else {
+                    photoUrl = await uploadImage(selectedFile)
+                }
             }
 
             onUpdate({ ...editData, photo: photoUrl })
             setIsEditing(false)
             setSelectedFile(null)
+            setDragPos({ x: 0, y: 0 })
         } catch (error) {
             alert('Failed to update member: ' + error.message)
         } finally {
@@ -278,6 +384,8 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
         setIsEditing(false)
         setShowDeleteConfirm(false)
         setEditData({ ...member })
+        setDragPos({ x: 0, y: 0 })
+        setSelectedFile(null)
     }, [member])
 
     return (
@@ -365,13 +473,35 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
                 {/* Profile Content */}
                 <div className="px-6 pb-8 -mt-16 text-center">
                     <div className="relative inline-block">
-                        <div className="w-32 h-32 rounded-full border-4 border-zinc-900 bg-zinc-800 flex items-center justify-center overflow-hidden mb-4 shadow-xl">
+                        <div
+                            className={`w-32 h-32 rounded-full border-4 border-zinc-900 bg-zinc-800 flex items-center justify-center overflow-hidden mb-4 shadow-xl ${isEditing ? 'cursor-move ring-2 ring-purple-500 ring-offset-2 ring-offset-black' : ''}`}
+                            ref={containerRef}
+                            onMouseDown={handleMouseDown}
+                            onMouseMove={handleMouseMove}
+                            onMouseUp={handleMouseUp}
+                            onMouseLeave={handleMouseUp}
+                            onTouchStart={handleTouchStart}
+                            onTouchMove={handleTouchMove}
+                            onTouchEnd={handleMouseUp}
+                        >
                             {isEditing ? (
-                                <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 group cursor-pointer relative">
+                                <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 group relative">
                                     {editData.photo ? (
                                         <>
-                                            <img src={editData.photo} alt="Preview" className="w-full h-full object-cover opacity-50 group-hover:opacity-30 transition-opacity" />
-                                            <Upload className="absolute text-white opacity-80" size={24} />
+                                            <img
+                                                ref={imageRef}
+                                                src={editData.photo}
+                                                alt="Preview"
+                                                className="w-full h-full object-cover transition-transform duration-0 pointer-events-none select-none"
+                                                style={{ transform: `translate(${dragPos.x}px, ${dragPos.y}px)` }}
+                                            />
+                                            {!isDragging && (
+                                                <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
+                                                    <div className="bg-black/50 p-1 rounded-full backdrop-blur-sm">
+                                                        <Upload className="text-white opacity-80" size={20} />
+                                                    </div>
+                                                </div>
+                                            )}
                                         </>
                                     ) : (
                                         <Upload className="text-zinc-500" size={24} />
