@@ -1,178 +1,124 @@
+```javascript
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabaseClient';
 // Needed for creating a temp client to avoid auto-login
 import { createClient } from '@supabase/supabase-js';
 
-// ... (inside component)
+const AdminDashboard = () => {
+    const { currentUser, logout, loading, signup } = useAuth();
+    const navigate = useNavigate();
+    const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-// Handle Delete Admin
-const handleDeleteAdmin = async (id, email) => {
-    if (!window.confirm(`Are you sure you want to remove admin "${email}"?`)) return;
+    // Add Admin State
+    const [newAdminEmail, setNewAdminEmail] = useState('');
+    const [newAdminPass, setNewAdminPass] = useState('');
+    const [adminMsg, setAdminMsg] = useState({ type: '', text: '' });
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    try {
-        // Delete from profiles (Note: This might not delete the Auth User depending on RLS/Triggers, 
-        // but effectively removes them from this list)
-        const { error } = await supabase
-            .from('profiles')
-            .delete()
-            .eq('id', id);
+    // Admin List State
+    const [admins, setAdmins] = useState([]);
+    const [loadingAdmins, setLoadingAdmins] = useState(true);
 
-        if (error) throw error;
+    const fetchAdmins = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .order('created_at', { ascending: false });
 
-        setAdminMsg({ type: 'success', text: `Removed admin: ${email}` });
+            if (error) throw error;
+            setAdmins(data || []);
+        } catch (error) {
+            console.error("Error fetching admins:", error.message);
+        } finally {
+            setLoadingAdmins(false);
+        }
+    };
+
+    useEffect(() => {
         fetchAdmins();
-    } catch (error) {
-        console.error("Delete Error:", error);
-        setAdminMsg({ type: 'error', text: "Failed to delete: " + error.message });
-    }
-};
+    }, []);
 
-const handleAddAdmin = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setAdminMsg({ type: '', text: '' });
-
-    if (newAdminPass.length < 6) {
-        setAdminMsg({ type: 'error', text: 'Password must be at least 6 characters' });
-        setIsSubmitting(false);
-        return;
+    // Show loading or redirect
+    if (loading) {
+        return <div className="min-h-screen bg-black text-white flex items-center justify-center">Loading...</div>;
     }
 
-    try {
-        // TRICK: Create a temporary Supabase client to create the user *without* logging out the current admin.
-        // We set persistSession: false so it doesn't touch local storage.
-        const tempSupabase = createClient(
-            import.meta.env.VITE_SUPABASE_URL,
-            import.meta.env.VITE_SUPABASE_ANON_KEY,
-            { auth: { persistSession: false } }
-        );
+    if (!currentUser) {
+        navigate('/login');
+        return null;
+    }
 
-        const { data, error } = await tempSupabase.auth.signUp({
-            email: newAdminEmail,
-            password: newAdminPass,
-        });
+    const handleLogout = async () => {
+        await logout();
+        navigate('/');
+    };
 
-        if (error) {
-            setAdminMsg({ type: 'error', text: error.message });
-        } else {
-            setAdminMsg({ type: 'success', text: `Admin created! (${newAdminEmail})` });
-            setNewAdminEmail('');
-            setNewAdminPass('');
+    // Handle Delete Admin
+    const handleDeleteAdmin = async (id, email) => {
+        if (!window.confirm(`Are you sure you want to remove admin "${email}" ? `)) return;
 
-            // Wait a bit for the trigger to create the profile, then refresh
-            setTimeout(fetchAdmins, 2000);
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            
+            setAdminMsg({ type: 'success', text: `Removed admin: ${ email } ` });
+            fetchAdmins();
+        } catch (error) {
+            console.error("Delete Error:", error);
+            setAdminMsg({ type: 'error', text: "Failed to delete: " + error.message });
         }
-    } catch (error) {
-        setAdminMsg({ type: 'error', text: 'An unexpected error occurred' });
-        console.error(error);
-    } finally {
-        setIsSubmitting(false);
-    }
-};
+    };
 
-// ... (Render section changes)
+    const handleAddAdmin = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        setAdminMsg({ type: '', text: '' });
 
-{
-    admins.map((admin) => (
-        <div key={admin.id} className="flex items-center justify-between p-3 bg-black/20 rounded-xl border border-white/5 group/item">
-            <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center font-bold text-sm">
-                    {admin.email ? admin.email[0].toUpperCase() : 'A'}
-                </div>
-                <div className="overflow-hidden">
-                    <p className="font-medium truncate text-sm">{admin.email}</p>
-                    <p className="text-xs text-gray-500">Joined: {new Date(admin.created_at).toLocaleDateString()}</p>
-                </div>
-            </div>
-            {/* Delete Button */}
-            {currentUser.email !== admin.email && (
-                <button
-                    onClick={() => handleDeleteAdmin(admin.id, admin.email)}
-                    className="p-2 text-red-500/50 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors opacity-0 group-hover/item:opacity-100 focus:opacity-100"
-                    title="Remove Admin"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
-                </button>
-            )}
-        </div>
-    ))
-}
-const { currentUser, logout, loading, signup } = useAuth();
-const navigate = useNavigate();
-const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-
-// Add Admin State
-const [newAdminEmail, setNewAdminEmail] = useState('');
-const [newAdminPass, setNewAdminPass] = useState('');
-const [adminMsg, setAdminMsg] = useState({ type: '', text: '' });
-const [isSubmitting, setIsSubmitting] = useState(false);
-
-// Admin List State
-const [admins, setAdmins] = useState([]);
-const [loadingAdmins, setLoadingAdmins] = useState(true);
-
-const fetchAdmins = async () => {
-    try {
-        const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        setAdmins(data || []);
-    } catch (error) {
-        console.error("Error fetching admins:", error.message);
-    } finally {
-        setLoadingAdmins(false);
-    }
-};
-
-useEffect(() => {
-    fetchAdmins();
-}, []);
-
-// Show loading or redirect
-if (loading) {
-    return <div className="min-h-screen bg-black text-white flex items-center justify-center">Loading...</div>;
-}
-
-if (!currentUser) {
-    navigate('/login');
-    return null;
-}
-
-const handleLogout = async () => {
-    await logout();
-    navigate('/');
-};
-
-const handleAddAdmin = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setAdminMsg({ type: '', text: '' });
-
-    if (newAdminPass.length < 6) {
-        setAdminMsg({ type: 'error', text: 'Password must be at least 6 characters' });
-        setIsSubmitting(false);
-        return;
-    }
-
-    try {
-        const result = await signup(newAdminEmail, newAdminPass);
-        if (result.success) {
-            setAdminMsg({ type: 'success', text: `Admin account created for ${newAdminEmail}!` });
-            setNewAdminEmail('');
-            setNewAdminPass('');
-            fetchAdmins(); // Refresh list
-        } else {
-            setAdminMsg({ type: 'error', text: result.error });
+        if (newAdminPass.length < 6) {
+            setAdminMsg({ type: 'error', text: 'Password must be at least 6 characters' });
+            setIsSubmitting(false);
+            return;
         }
-    } catch (error) {
-        setAdminMsg({ type: 'error', text: 'An unexpected error occurred' });
-    } finally {
-        setIsSubmitting(false);
-    }
-};
+
+        try {
+            // TRICK: Create a temporary Supabase client to create the user *without* logging out the current admin.
+            // We set persistSession: false so it doesn't touch local storage.
+            const tempSupabase = createClient(
+                import.meta.env.VITE_SUPABASE_URL,
+                import.meta.env.VITE_SUPABASE_ANON_KEY,
+                { auth: { persistSession: false } }
+            );
+
+            const { data, error } = await tempSupabase.auth.signUp({
+                email: newAdminEmail,
+                password: newAdminPass,
+            });
+
+            if (error) {
+                 setAdminMsg({ type: 'error', text: error.message });
+            } else {
+                setAdminMsg({ type: 'success', text: `Admin created!(${ newAdminEmail })` });
+                setNewAdminEmail('');
+                setNewAdminPass('');
+                
+                // Wait a bit for the trigger to create the profile, then refresh
+                setTimeout(fetchAdmins, 2000); 
+            }
+        } catch (error) {
+            setAdminMsg({ type: 'error', text: 'An unexpected error occurred' });
+            console.error(error);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
 return (
     <div className="min-h-screen bg-black text-white p-6 md:p-12 relative overflow-hidden">
@@ -249,13 +195,13 @@ return (
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className={`w-full py-3 bg-green-600 hover:bg-green-700 rounded-xl font-bold transition-all shadow-lg shadow-green-500/20 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`w - full py - 3 bg - green - 600 hover: bg - green - 700 rounded - xl font - bold transition - all shadow - lg shadow - green - 500 / 20 ${ isSubmitting ? 'opacity-50 cursor-not-allowed' : '' } `}
                         >
                             {isSubmitting ? 'Creating...' : 'Create Admin'}
                         </button>
                     </form>
                     {adminMsg.text && (
-                        <p className={`mt-4 text-sm font-medium ${adminMsg.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>
+                        <p className={`mt - 4 text - sm font - medium ${ adminMsg.type === 'error' ? 'text-red-400' : 'text-green-400' } `}>
                             {adminMsg.text}
                         </p>
                     )}
@@ -277,17 +223,31 @@ return (
                             <p className="text-gray-500 text-center py-4">No admins found (Requires 'profiles' table).</p>
                         ) : (
                             <div className="space-y-3">
-                                {admins.map((admin) => (
-                                    <div key={admin.id} className="flex items-center gap-4 p-3 bg-black/20 rounded-xl border border-white/5">
-                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center font-bold text-sm">
-                                            {admin.email ? admin.email[0].toUpperCase() : 'A'}
+                                    {admins.map((admin) => (
+                                        <div key={admin.id} className="flex items-center justify-between p-3 bg-black/20 rounded-xl border border-white/5 group/item">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center font-bold text-sm">
+                                                    {admin.email ? admin.email[0].toUpperCase() : 'A'}
+                                                </div>
+                                                <div className="overflow-hidden">
+                                                    <p className="font-medium truncate text-sm">{admin.email}</p>
+                                                    <p className="text-xs text-gray-500">Joined: {new Date(admin.created_at).toLocaleDateString()}</p>
+                                                </div>
+                                            </div>
+                                            {/* Delete Button */}
+                                            {currentUser.email !== admin.email && (
+                                                <button
+                                                    onClick={() => handleDeleteAdmin(admin.id, admin.email)}
+                                                    className="p-2 text-red-500/50 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors opacity-0 group-hover/item:opacity-100 focus:opacity-100"
+                                                    title="Remove Admin"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                    </svg>
+                                                </button>
+                                            )}
                                         </div>
-                                        <div className="overflow-hidden">
-                                            <p className="font-medium truncate text-sm">{admin.email}</p>
-                                            <p className="text-xs text-gray-500">Joined: {new Date(admin.created_at).toLocaleDateString()}</p>
-                                        </div>
-                                    </div>
-                                ))}
+                                    ))}
                             </div>
                         )}
                     </div>
@@ -337,9 +297,9 @@ return (
 
                                     // Check Cloudinary Config present (cannot ping without upload)
                                     // We just alert success
-                                    alert(`✅ SYSTEM HEALTHY\n\nSupabase: Connected\nAlbums Count: ${data === null ? 'Unknown' : 'Active'}\nCloudinary Config: Present`);
+                                    alert(`✅ SYSTEM HEALTHY\n\nSupabase: Connected\nAlbums Count: ${ data === null ? 'Unknown' : 'Active' } \nCloudinary Config: Present`);
                                 } catch (e) {
-                                    alert(`❌ CONNECTION ERROR\n\n${e.message}\n\nPlease check Vercel Environment Variables!`);
+                                    alert(`❌ CONNECTION ERROR\n\n${ e.message } \n\nPlease check Vercel Environment Variables!`);
                                 }
                             }}
                             className="px-6 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-xl border border-white/10"
