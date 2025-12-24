@@ -238,7 +238,7 @@ const AdminDashboard = () => {
                                             {currentUser.email !== admin.email && (
                                                 <button
                                                     onClick={() => handleDeleteAdmin(admin.id, admin.email)}
-                                                    className="p-2 text-red-500/50 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors opacity-0 group-hover/item:opacity-100 focus:opacity-100"
+                                                    className="p-2 text-red-500 hover:text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
                                                     title="Remove Admin"
                                                 >
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
