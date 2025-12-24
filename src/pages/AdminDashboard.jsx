@@ -21,6 +21,7 @@ const AdminDashboard = () => {
     // Admin List State
     const [admins, setAdmins] = useState([]);
     const [loadingAdmins, setLoadingAdmins] = useState(true);
+    const [deleteCandidate, setDeleteCandidate] = useState(null);
 
     const fetchAdmins = async () => {
         try {
@@ -57,23 +58,30 @@ const AdminDashboard = () => {
         navigate('/');
     };
 
-    // Handle Delete Admin
-    const handleDeleteAdmin = async (id, email) => {
-        if (!window.confirm(`Are you sure you want to remove admin "${email}" ? `)) return;
+    // Handle Delete Trigger (Opens Modal)
+    const handleDeleteClick = (admin) => {
+        setDeleteCandidate(admin);
+    };
+
+    // Actual Delete Logic
+    const confirmDeleteAdmin = async () => {
+        if (!deleteCandidate) return;
 
         try {
             const { error } = await supabase
                 .from('profiles')
                 .delete()
-                .eq('id', id);
+                .eq('id', deleteCandidate.id);
 
             if (error) throw error;
 
-            setAdminMsg({ type: 'success', text: `Removed admin: ${email} ` });
+            setAdminMsg({ type: 'success', text: `Removed admin: ${deleteCandidate.email}` });
             fetchAdmins();
         } catch (error) {
             console.error("Delete Error:", error);
             setAdminMsg({ type: 'error', text: "Failed to delete: " + error.message });
+        } finally {
+            setDeleteCandidate(null);
         }
     };
 
@@ -237,7 +245,7 @@ const AdminDashboard = () => {
                                             {/* Delete Button */}
                                             {currentUser.email !== admin.email && (
                                                 <button
-                                                    onClick={() => handleDeleteAdmin(admin.id, admin.email)}
+                                                    onClick={() => handleDeleteClick(admin)}
                                                     className="p-2 text-red-500 hover:text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
                                                     title="Remove Admin"
                                                 >
@@ -310,6 +318,55 @@ const AdminDashboard = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Delete Confirmation Modal */}
+            <AnimatePresence>
+                {deleteCandidate && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md"
+                        onClick={() => setDeleteCandidate(null)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            className="bg-gray-900 border border-white/10 rounded-3xl p-8 max-w-sm w-full shadow-2xl relative overflow-hidden"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <div className="relative z-10 text-center">
+                                <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/20">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </div>
+
+                                <h3 className="text-xl font-black text-white mb-2">Remove Admin?</h3>
+                                <p className="text-gray-400 mb-6 text-sm">
+                                    Are you sure you want to remove <strong>{deleteCandidate.email}</strong>? This action cannot be undone.
+                                </p>
+
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => setDeleteCandidate(null)}
+                                        className="flex-1 px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold transition-all border border-white/5"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={confirmDeleteAdmin}
+                                        className="flex-1 px-4 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold transition-all shadow-lg shadow-red-500/20"
+                                    >
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Custom Logout Confirmation Modal */}
             <AnimatePresence>
