@@ -23,6 +23,11 @@ const AdminDashboard = () => {
     const [loadingAdmins, setLoadingAdmins] = useState(true);
     const [deleteCandidate, setDeleteCandidate] = useState(null);
 
+    // Change Password State
+    const [changeAdminPass, setChangeAdminPass] = useState('');
+    const [passMsg, setPassMsg] = useState({ type: '', text: '' });
+    const [isUpdatingPass, setIsUpdatingPass] = useState(false);
+
     const fetchAdmins = async () => {
         try {
             const { data, error } = await supabase
@@ -85,6 +90,38 @@ const AdminDashboard = () => {
         }
     };
 
+    // ... existing handlers ...
+
+    // ... existing handlers ...
+
+    // Handle Change Password (Self)
+    const handleUpdatePassword = async (e) => {
+        e.preventDefault();
+        setIsUpdatingPass(true);
+        setPassMsg({ type: '', text: '' });
+
+        if (changeAdminPass.length < 6) {
+            setPassMsg({ type: 'error', text: 'Password must be at least 6 characters' });
+            setIsUpdatingPass(false);
+            return;
+        }
+
+        try {
+            const { error } = await supabase.auth.updateUser({
+                password: changeAdminPass
+            });
+
+            if (error) throw error;
+
+            setPassMsg({ type: 'success', text: 'Password updated successfully!' });
+            setChangeAdminPass('');
+        } catch (error) {
+            console.error("Update Password Error:", error);
+            setPassMsg({ type: 'error', text: error.message });
+        } finally {
+            setIsUpdatingPass(false);
+        }
+    };
     const handleAddAdmin = async (e) => {
         e.preventDefault();
         setIsSubmitting(true);
@@ -263,6 +300,43 @@ const AdminDashboard = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Account Security Card (Change Password) */}
+                    <div className="bg-gray-900 border border-white/10 rounded-3xl p-8 shadow-xl">
+                        <h2 className="text-2xl font-bold mb-6 text-white flex items-center gap-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                            My Account Security
+                        </h2>
+
+                        <form onSubmit={handleUpdatePassword} className="space-y-4">
+                            <div>
+                                <label className="text-gray-400 text-sm mb-1 block">Change My Password</label>
+                                <input
+                                    type="password"
+                                    placeholder="Enter new password"
+                                    value={changeAdminPass}
+                                    onChange={e => setChangeAdminPass(e.target.value)}
+                                    className="w-full bg-black/30 rounded-xl px-4 py-3 border border-white/10 focus:border-yellow-500 outline-none transition-colors text-white"
+                                    required
+                                    minLength={6}
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={isUpdatingPass}
+                                className={`w-full py-3 bg-yellow-600 hover:bg-yellow-700 rounded-xl font-bold transition-all shadow-lg shadow-yellow-500/20 ${isUpdatingPass ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                                {isUpdatingPass ? 'Updating...' : 'Update Password'}
+                            </button>
+                        </form>
+                        {passMsg.text && (
+                            <p className={`mt-4 text-sm font-medium ${passMsg.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>
+                                {passMsg.text}
+                            </p>
+                        )}
+                    </div>
+
                     {/* Access Members Card */}
                     <div className="bg-gray-900 border border-white/10 rounded-3xl p-8 shadow-xl hover:border-blue-500/30 transition-all group">
                         <h2 className="text-2xl font-bold mb-4 text-white flex items-center gap-3">
