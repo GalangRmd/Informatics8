@@ -235,6 +235,157 @@ const Members = () => {
     )
 }
 
+// Internal Crop Modal Component
+const CropModal = ({ imageSrc, onCancel, onCrop }) => {
+    const [zoom, setZoom] = useState(1)
+    const [dragPos, setDragPos] = useState({ x: 0, y: 0 })
+    const [isDragging, setIsDragging] = useState(false)
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+
+    // Touch/Mouse Handlers (Reused logic)
+    const handleMouseDown = (e) => {
+        e.preventDefault()
+        setIsDragging(true)
+        setDragStart({ x: e.clientX - dragPos.x, y: e.clientY - dragPos.y })
+    }
+    const handleMouseMove = (e) => {
+        if (!isDragging) return
+        e.preventDefault()
+        setDragPos({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y })
+    }
+    const handleMouseUp = () => setIsDragging(false)
+
+    // Touch
+    const handleTouchStart = (e) => {
+        const touch = e.touches[0]
+        setIsDragging(true)
+        setDragStart({ x: touch.clientX - dragPos.x, y: touch.clientY - dragPos.y })
+    }
+    const handleTouchMove = (e) => {
+        if (!isDragging) return
+        const touch = e.touches[0]
+        setDragPos({ x: touch.clientX - dragStart.x, y: touch.clientY - dragStart.y })
+    }
+
+    const performCrop = async () => {
+        const img = new Image()
+        img.src = imageSrc
+        img.crossOrigin = 'anonymous'
+        await new Promise(r => img.onload = r)
+
+        const canvas = document.createElement('canvas')
+        const size = 500 // Higher resolution for final crop
+        canvas.width = size
+        canvas.height = size
+        const ctx = canvas.getContext('2d')
+
+        // Render Logic matching the Preview
+        // Preview is 256px (w-64).
+        const PREVIEW_SIZE = 256
+        const pixelScale = size / PREVIEW_SIZE
+
+        // Calculate Image dimensions in Preview
+        const aspect = img.naturalWidth / img.naturalHeight
+        let renderW, renderH
+        if (aspect > 1) {
+            renderH = PREVIEW_SIZE
+            renderW = PREVIEW_SIZE * aspect
+        } else {
+            renderW = PREVIEW_SIZE
+            renderH = PREVIEW_SIZE / aspect
+        }
+
+        // Apply Zoom
+        renderW *= zoom
+        renderH *= zoom
+
+        // Draw Center + Offset
+        let drawX = (size - (renderW * pixelScale)) / 2
+        let drawY = (size - (renderH * pixelScale)) / 2
+
+        // DragPos is in DOM pixels relative to preview. Scale up.
+        drawX += dragPos.x * pixelScale
+        drawY += dragPos.y * pixelScale
+
+        ctx.drawImage(img, drawX, drawY, renderW * pixelScale, renderH * pixelScale)
+
+        canvas.toBlob((blob) => {
+            onCrop(blob)
+        }, 'image/jpeg', 0.95)
+    }
+
+    return (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm flex flex-col items-center">
+                <h3 className="text-xl font-bold text-white mb-4">Crop Profile Photo</h3>
+
+                {/* Crop Area */}
+                <div className="relative w-64 h-64 bg-black rounded-lg overflow-hidden border-2 border-dashed border-zinc-700 mb-6 touch-none">
+                    {/* Image Layer */}
+                    <div
+                        className="absolute inset-0 cursor-move"
+                        onMouseDown={handleMouseDown}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
+                        onMouseLeave={handleMouseUp}
+                        onTouchStart={handleTouchStart}
+                        onTouchMove={handleTouchMove}
+                        onTouchEnd={handleMouseUp}
+                    >
+                        <img
+                            src={imageSrc}
+                            alt="Crop Target"
+                            className="absolute max-w-none pointer-events-none select-none"
+                            style={{
+                                top: '50%',
+                                left: '50%',
+                                minWidth: '100%',
+                                minHeight: '100%',
+                                transform: `translate(calc(-50% + ${dragPos.x}px), calc(-50% + ${dragPos.y}px)) scale(${zoom})`,
+                            }}
+                        />
+                    </div>
+
+                    {/* Circular Mask Overlay - Shows what will be cropped */}
+                    <div className="absolute inset-0 pointer-events-none shadow-[0_0_0_9999px_rgba(0,0,0,0.7)] rounded-full m-1 border-2 border-white/50"></div>
+                </div>
+
+                {/* Controls */}
+                <div className="w-full space-y-4 mb-6">
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs text-zinc-400">Zoom</span>
+                        <input
+                            type="range"
+                            min="0.5"
+                            max="3"
+                            step="0.05"
+                            value={zoom}
+                            onChange={e => setZoom(parseFloat(e.target.value))}
+                            className="flex-1 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                        />
+                    </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3 w-full">
+                    <button
+                        onClick={onCancel}
+                        className="flex-1 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-medium"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={performCrop}
+                        className="flex-1 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold"
+                    >
+                        Apply Crop
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
     const [isEditing, setIsEditing] = useState(false)
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -242,161 +393,23 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
     const [uploading, setUploading] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
 
-    const [zoom, setZoom] = useState(1)
-
-    // Drag/Crop State
-    const [dragPos, setDragPos] = useState({ x: 0, y: 0 })
-    const [isDragging, setIsDragging] = useState(false)
-    const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
-    const containerRef = useRef(null)
-    const imageRef = useRef(null)
-
-    const handleMouseDown = (e) => {
-        if (!isEditing || !selectedFile && !editData.photo) return
-        e.preventDefault()
-        setIsDragging(true)
-        setDragStart({
-            x: e.clientX - dragPos.x,
-            y: e.clientY - dragPos.y
-        })
-    }
-
-    const handleMouseMove = (e) => {
-        if (!isDragging || !isEditing) return
-        e.preventDefault()
-        setDragPos({
-            x: e.clientX - dragStart.x,
-            y: e.clientY - dragStart.y
-        })
-    }
-
-    const handleMouseUp = () => {
-        setIsDragging(false)
-    }
-
-    // Touch support
-    const handleTouchStart = (e) => {
-        if (!isEditing || !selectedFile && !editData.photo) return
-        const touch = e.touches[0]
-        setIsDragging(true)
-        setDragStart({
-            x: touch.clientX - dragPos.x,
-            y: touch.clientY - dragPos.y
-        })
-    }
-
-    const handleTouchMove = (e) => {
-        if (!isDragging || !isEditing) return
-        const touch = e.touches[0]
-        setDragPos({
-            x: touch.clientX - dragStart.x,
-            y: touch.clientY - dragStart.y
-        })
-    }
-
-    const handleRemovePhoto = () => {
-        setEditData({ ...editData, photo: '' })
-        setSelectedFile(null)
-        setDragPos({ x: 0, y: 0 })
-        setZoom(1)
-    }
-
-    // Crop Image Utility
-    const getCroppedImage = async (sourceUrl, offset, zoomVal, containerSize) => {
-        return new Promise((resolve, reject) => {
-            const img = new Image()
-            img.src = sourceUrl
-            img.crossOrigin = 'anonymous'
-            img.onload = () => {
-                const canvas = document.createElement('canvas')
-                const size = 300 // Output resolution (Square)
-                canvas.width = size
-                canvas.height = size
-                const ctx = canvas.getContext('2d')
-
-                // 1. Calculate how the image is rendered in the DOM Container
-                // The DOM container has size `containerSize` (e.g., 120px inner width).
-                // The CSS rules are: min-width: 100%; min-height: 100%; object-cover equivalent logic manually?
-                // Actually my CSS uses minWidth: 100%, minHeight: 100%.
-                // This means:
-                // If Aspect > 1 (Wide): Height = ContainerSize, Width = ContainerSize * Aspect
-                // If Aspect < 1 (Tall): Width = ContainerSize, Height = ContainerSize / Aspect
-
-                const aspect = img.naturalWidth / img.naturalHeight
-
-                // Base dimensions in DOM pixels (before zoom)
-                let domRenderW, domRenderH
-                if (aspect > 1) {
-                    domRenderH = containerSize
-                    domRenderW = containerSize * aspect
-                } else {
-                    domRenderW = containerSize
-                    domRenderH = containerSize / aspect
-                }
-
-                // 2. We need to map "DOM Pixels" to "Canvas Pixels"
-                // The Scale Factor is straightforward: CanvasSize / ContainerSize
-                // Example: 300 / 120 = 2.5
-                const pixelScale = size / containerSize
-
-                // 3. Calculate Drawing Dimensions on Canvas
-                // We take the DOM dimensions, apply the zoom, then convert to Canvas pixels
-                let drawW = domRenderW * zoomVal * pixelScale
-                let drawH = domRenderH * zoomVal * pixelScale
-
-                // 4. Calculate Center Position
-                // We want to center the image on the canvas
-                let drawX = (size - drawW) / 2
-                let drawY = (size - drawH) / 2
-
-                // 5. Apply User Translation
-                // The user drags in DOM pixels (offset).
-                // We scale this offset to Canvas pixels.
-                drawX += offset.x * pixelScale
-                drawY += offset.y * pixelScale
-
-                // Draw
-                ctx.drawImage(img, drawX, drawY, drawW, drawH)
-
-                canvas.toBlob((blob) => {
-                    resolve(blob)
-                }, 'image/jpeg', 0.9)
-            }
-            img.onerror = reject
-        })
-    }
+    // Crop Modal State
+    const [showCropModal, setShowCropModal] = useState(false)
+    const [rawPhotoUrl, setRawPhotoUrl] = useState(null)
 
     const handleSave = async () => {
         try {
             setUploading(true)
             let photoUrl = editData.photo
 
-            // Re-upload if file changed OR if position/zoom changed
-            const needsCrop = (selectedFile || (editData.photo && editData.photo.startsWith('blob:'))) &&
-                (dragPos.x !== 0 || dragPos.y !== 0 || zoom !== 1)
-
-            // If user removed photo
-            if (!editData.photo && !selectedFile) {
-                photoUrl = ''
+            // If we have a file (it's already cropped by the modal flow), upload it
+            if (selectedFile) {
+                photoUrl = await uploadImage(selectedFile)
             }
-            else if (selectedFile || needsCrop) {
-                const source = selectedFile ? URL.createObjectURL(selectedFile) : editData.photo
-
-                // Get actual container size for accuracy (border-box handling)
-                // Default to 120 (128px - 8px border) if ref missing
-                const containerSize = containerRef.current ?
-                    (containerRef.current.clientWidth) : 120
-
-                const croppedBlob = await getCroppedImage(source, dragPos, zoom, containerSize)
-                photoUrl = await uploadImage(croppedBlob)
-            }
-            // If just updating text and photo is existing URL -> keep it
 
             onUpdate({ ...editData, photo: photoUrl })
             setIsEditing(false)
             setSelectedFile(null)
-            setDragPos({ x: 0, y: 0 })
-            setZoom(1)
         } catch (error) {
             alert('Failed to update member: ' + error.message)
         } finally {
@@ -411,328 +424,306 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
     const handleFileChange = (e) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0]
-            setSelectedFile(file)
-            // Preview
-            setEditData({ ...editData, photo: URL.createObjectURL(file) })
-            setDragPos({ x: 0, y: 0 })
-            setZoom(1)
+            const url = URL.createObjectURL(file)
+            setRawPhotoUrl(url)
+            setShowCropModal(true)
+            // We don't set selectedFile yet. We wait for crop.
         }
+    }
+
+    const handleCropFinished = (croppedBlob) => {
+        const croppedUrl = URL.createObjectURL(croppedBlob)
+        setEditData({ ...editData, photo: croppedUrl })
+        setSelectedFile(croppedBlob) // This blob is ready to upload
+        setShowCropModal(false)
+        setRawPhotoUrl(null)
     }
 
     // Reset states when member changes
     useEffect(() => {
         setIsEditing(false)
         setShowDeleteConfirm(false)
+        setShowCropModal(false)
+        setRawPhotoUrl(null)
         setEditData({ ...member })
-        setDragPos({ x: 0, y: 0 })
-        setZoom(1)
         setSelectedFile(null)
     }, [member])
 
     return (
-        <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-            onClick={onClose}
-        >
+        <>
+            {showCropModal && rawPhotoUrl && (
+                <CropModal
+                    imageSrc={rawPhotoUrl}
+                    onCancel={() => {
+                        setShowCropModal(false)
+                        setRawPhotoUrl(null)
+                    }}
+                    onCrop={handleCropFinished}
+                />
+            )}
+
             <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl relative"
-                onClick={e => e.stopPropagation()}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+                onClick={onClose}
             >
-                {/* Delete Confirmation Overlay */}
-                <AnimatePresence>
-                    {showDeleteConfirm && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="absolute inset-0 z-20 bg-zinc-900/95 backdrop-blur flex flex-col items-center justify-center p-8 text-center"
+                <motion.div
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.9, opacity: 0 }}
+                    className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl relative"
+                    onClick={e => e.stopPropagation()}
+                >
+                    {/* Delete Confirmation Overlay */}
+                    <AnimatePresence>
+                        {showDeleteConfirm && (
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="absolute inset-0 z-20 bg-zinc-900/95 backdrop-blur flex flex-col items-center justify-center p-8 text-center"
+                            >
+                                <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mb-4">
+                                    <AlertTriangle size={32} className="text-red-500" />
+                                </div>
+                                <h3 className="text-xl font-bold text-white mb-2">Delete Member?</h3>
+                                <p className="text-zinc-400 mb-6">
+                                    Are you sure you want to delete <span className="text-white font-semibold">{member.name}</span>? This action cannot be undone.
+                                </p>
+                                <div className="flex gap-3 w-full">
+                                    <button
+                                        onClick={() => setShowDeleteConfirm(false)}
+                                        className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-semibold transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={onDelete}
+                                        className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-semibold transition-colors"
+                                    >
+                                        Delete
+                                    </button>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* Header/Cover */}
+                    <div className="h-32 bg-black relative flex items-center justify-center overflow-hidden border-b border-zinc-800">
+                        {/* 3D Text Banner */}
+                        <h1
+                            className="text-5xl font-black italic uppercase tracking-widest glossy-text transform -rotate-6 opacity-90 translate-y-1 relative z-10"
                         >
-                            <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mb-4">
-                                <AlertTriangle size={32} className="text-red-500" />
-                            </div>
-                            <h3 className="text-xl font-bold text-white mb-2">Delete Member?</h3>
-                            <p className="text-zinc-400 mb-6">
-                                Are you sure you want to delete <span className="text-white font-semibold">{member.name}</span>? This action cannot be undone.
-                            </p>
-                            <div className="flex gap-3 w-full">
+                            Informatics 8
+                        </h1>
+
+                        <button
+                            onClick={onClose}
+                            className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/40 rounded-full text-white transition-colors z-10"
+                        >
+                            <X size={20} />
+                        </button>
+                        {isAdmin && !isEditing && (
+                            <div className="absolute top-4 left-4 flex gap-2 z-10">
                                 <button
-                                    onClick={() => setShowDeleteConfirm(false)}
-                                    className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-semibold transition-colors"
+                                    onClick={() => setIsEditing(true)}
+                                    className="p-2 bg-black/20 hover:bg-black/40 rounded-full text-white transition-colors"
                                 >
-                                    Cancel
+                                    <Edit2 size={20} />
                                 </button>
                                 <button
-                                    onClick={onDelete}
-                                    className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-semibold transition-colors"
+                                    onClick={() => setShowDeleteConfirm(true)}
+                                    className="p-2 bg-red-500/80 hover:bg-red-600 rounded-full text-white transition-colors"
                                 >
-                                    Delete
+                                    <Trash2 size={20} />
                                 </button>
                             </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                        )}
+                    </div>
 
-                {/* Header/Cover */}
-                <div className="h-32 bg-black relative flex items-center justify-center overflow-hidden border-b border-zinc-800">
-                    {/* 3D Text Banner */}
-                    <h1
-                        className="text-5xl font-black italic uppercase tracking-widest glossy-text transform -rotate-6 opacity-90 translate-y-1 relative z-10"
-                    >
-                        Informatics 8
-                    </h1>
+                    {/* Profile Content */}
+                    <div className="px-6 pb-8 -mt-16 text-center">
+                        <div className="flex flex-col items-center">
+                            <div className="relative inline-block group">
+                                <div
+                                    className={`w-32 h-32 rounded-full border-4 border-zinc-900 bg-zinc-800 relative overflow-hidden mb-4 shadow-xl ${isEditing ? 'ring-2 ring-purple-500 ring-offset-2 ring-offset-black' : ''}`}
+                                >
+                                    {isEditing ? (
+                                        <>
+                                            {editData.photo ? (
+                                                <img
+                                                    src={editData.photo}
+                                                    alt="Preview"
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500">
+                                                    <Upload size={24} />
+                                                </div>
+                                            )}
 
-                    <button
-                        onClick={onClose}
-                        className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/40 rounded-full text-white transition-colors z-10"
-                    >
-                        <X size={20} />
-                    </button>
-                    {isAdmin && !isEditing && (
-                        <div className="absolute top-4 left-4 flex gap-2 z-10">
-                            <button
-                                onClick={() => setIsEditing(true)}
-                                className="p-2 bg-black/20 hover:bg-black/40 rounded-full text-white transition-colors"
-                            >
-                                <Edit2 size={20} />
-                            </button>
-                            <button
-                                onClick={() => setShowDeleteConfirm(true)}
-                                className="p-2 bg-red-500/80 hover:bg-red-600 rounded-full text-white transition-colors"
-                            >
-                                <Trash2 size={20} />
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-                {/* Profile Content */}
-                <div className="px-6 pb-8 -mt-16 text-center">
-                    <div className="flex flex-col items-center">
-                        <div className="relative inline-block group">
-                            <div
-                                className={`w-32 h-32 rounded-full border-4 border-zinc-900 bg-zinc-800 relative overflow-hidden mb-4 shadow-xl ${isEditing && editData.photo ? 'cursor-move ring-2 ring-purple-500 ring-offset-2 ring-offset-black' : ''}`}
-                                ref={containerRef}
-                                onMouseDown={handleMouseDown}
-                                onMouseMove={handleMouseMove}
-                                onMouseUp={handleMouseUp}
-                                onMouseLeave={handleMouseUp}
-                                onTouchStart={handleTouchStart}
-                                onTouchMove={handleTouchMove}
-                                onTouchEnd={handleMouseUp}
-                            >
-                                {isEditing ? (
-                                    <>
-                                        {editData.photo ? (
-                                            <img
-                                                ref={imageRef}
-                                                src={editData.photo}
-                                                alt="Preview"
-                                                className="absolute max-w-none pointer-events-none select-none"
-                                                style={{
-                                                    // Start centered, then apply user transforms
-                                                    top: '50%',
-                                                    left: '50%',
-                                                    minWidth: '100%',
-                                                    minHeight: '100%',
-                                                    width: 'auto',
-                                                    height: 'auto',
-                                                    // The key is: translate(-50%, -50%) centers it. Then we add dragPos. Then Scale.
-                                                    transform: `translate(calc(-50% + ${dragPos.x}px), calc(-50% + ${dragPos.y}px)) scale(${zoom})`,
-                                                    objectFit: 'contain' // We rely on minWidth/Height to fill
-                                                }}
-                                                draggable={false}
-                                            />
-                                        ) : (
-                                            <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500">
-                                                <Upload size={24} />
-                                            </div>
-                                        )}
-
-                                        {/* Hidden Input for Upload - Only active if no photo or if button clicked */}
-                                        {!editData.photo && (
+                                            {/* Hidden Input for Upload - Always present to allow clicking to change/add */}
                                             <input
                                                 type="file"
                                                 accept="image/*"
                                                 onChange={handleFileChange}
                                                 className="absolute inset-0 opacity-0 cursor-pointer"
+                                                title="Change Photo"
                                             />
-                                        )}
-                                    </>
-                                ) : (
-                                    member.photo ? (
-                                        <img src={member.photo} alt={member.name} className="w-full h-full object-cover" />
+                                        </>
                                     ) : (
-                                        <User size={48} className="text-zinc-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-                                    )
-                                )}
-                            </div>
+                                        member.photo ? (
+                                            <img src={member.photo} alt={member.name} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <User size={48} className="text-zinc-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                                        )
+                                    )}
+                                </div>
 
-                            {/* Editing Controls Below Photo */}
-                            {isEditing && (
-                                <div className="space-y-3 mb-6 w-full max-w-[200px]">
-                                    {editData.photo ? (
-                                        <>
-                                            {/* Zoom Slider */}
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs text-zinc-500">Zoom</span>
-                                                <input
-                                                    type="range"
-                                                    min="0.5"
-                                                    max="3"
-                                                    step="0.05"
-                                                    value={zoom}
-                                                    onChange={e => setZoom(parseFloat(e.target.value))}
-                                                    className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                                                />
-                                            </div>
-
-                                            {/* Remove Button */}
+                                {/* Change/Remove Photo Buttons */}
+                                {isEditing && (
+                                    <div className="space-y-2 mb-6 w-full max-w-[200px]">
+                                        {editData.photo && (
                                             <button
-                                                onClick={handleRemovePhoto}
+                                                onClick={() => setEditData({ ...editData, photo: '' })}
                                                 className="text-xs text-red-400 hover:text-red-300 font-medium flex items-center justify-center gap-1 w-full py-1 bg-red-500/10 rounded"
                                             >
                                                 <Trash2 size={12} /> Remove Photo
                                             </button>
-                                        </>
+                                        )}
+                                        <div className="text-xs text-zinc-500">Tap circle to change photo</div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {isEditing ? (
+                            <div className="space-y-4 mb-6">
+                                <input
+                                    type="text"
+                                    name="name"
+                                    value={editData.name}
+                                    onChange={handleChange}
+                                    className="w-full bg-zinc-800 border-none rounded p-2 text-white font-bold text-center text-xl"
+                                    placeholder="Name"
+                                />
+                            </div>
+                        ) : (
+                            <>
+                                <h3 className="text-2xl font-bold text-white mb-1">{member.name}</h3>
+                                <p className="text-purple-400 text-sm mb-6">Informatics 8 Member</p>
+                            </>
+                        )}
+
+                        <div className="space-y-4 text-left bg-zinc-950/50 p-6 rounded-xl border border-zinc-800/50">
+                            <div className="flex items-center gap-3 text-zinc-300">
+                                <IdCard size={18} className="text-blue-500" />
+                                <div className="w-full">
+                                    <p className="text-xs text-zinc-500 uppercase tracking-wider">NIM</p>
+                                    {isEditing ? (
+                                        <input
+                                            type="text"
+                                            name="nim"
+                                            value={editData.nim}
+                                            onChange={handleChange}
+                                            className="w-full bg-zinc-800 rounded p-1 text-white text-sm"
+                                        />
                                     ) : (
-                                        <div className="text-xs text-zinc-500">Tap circle to upload</div>
+                                        <p className="font-mono">{member.nim || '-'}</p>
                                     )}
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-3 text-zinc-300">
+                                <Calendar size={18} className="text-pink-500" />
+                                <div className="w-full">
+                                    <p className="text-xs text-zinc-500 uppercase tracking-wider">Born</p>
+                                    {isEditing ? (
+                                        <input
+                                            type="date"
+                                            name="dob"
+                                            value={editData.dob}
+                                            onChange={handleChange}
+                                            className="w-full bg-zinc-800 rounded p-1 text-white text-sm"
+                                        />
+                                    ) : (
+                                        <p>{member.dob || '-'}</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {isEditing && (
+                                <div className="flex items-center gap-3 text-zinc-300">
+                                    <Instagram size={18} className="text-purple-500" />
+                                    <div className="w-full">
+                                        <p className="text-xs text-zinc-500 uppercase tracking-wider">Instagram</p>
+                                        <input
+                                            type="text"
+                                            name="instagram"
+                                            value={editData.instagram}
+                                            onChange={handleChange}
+                                            className="w-full bg-zinc-800 rounded p-1 text-white text-sm"
+                                            placeholder="@username"
+                                        />
+                                    </div>
                                 </div>
                             )}
                         </div>
-                    </div>
 
-                    {isEditing ? (
-                        <div className="space-y-4 mb-6">
-                            <input
-                                type="text"
-                                name="name"
-                                value={editData.name}
-                                onChange={handleChange}
-                                className="w-full bg-zinc-800 border-none rounded p-2 text-white font-bold text-center text-xl"
-                                placeholder="Name"
-                            />
-                        </div>
-                    ) : (
-                        <>
-                            <h3 className="text-2xl font-bold text-white mb-1">{member.name}</h3>
-                            <p className="text-purple-400 text-sm mb-6">Informatics 8 Member</p>
-                        </>
-                    )}
-
-                    <div className="space-y-4 text-left bg-zinc-950/50 p-6 rounded-xl border border-zinc-800/50">
-                        <div className="flex items-center gap-3 text-zinc-300">
-                            <IdCard size={18} className="text-blue-500" />
-                            <div className="w-full">
-                                <p className="text-xs text-zinc-500 uppercase tracking-wider">NIM</p>
-                                {isEditing ? (
-                                    <input
-                                        type="text"
-                                        name="nim"
-                                        value={editData.nim}
-                                        onChange={handleChange}
-                                        className="w-full bg-zinc-800 rounded p-1 text-white text-sm"
-                                    />
-                                ) : (
-                                    <p className="font-mono">{member.nim || '-'}</p>
-                                )}
+                        {isEditing ? (
+                            <div className="mt-6 flex gap-2">
+                                <button
+                                    onClick={() => setIsEditing(false)}
+                                    className="flex-1 py-3 bg-zinc-700 hover:bg-zinc-600 text-white rounded-xl font-semibold transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSave}
+                                    disabled={uploading}
+                                    className="flex-1 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {uploading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                                    {uploading ? 'Saving...' : 'Save'}
+                                </button>
                             </div>
-                        </div>
-
-                        <div className="flex items-center gap-3 text-zinc-300">
-                            <Calendar size={18} className="text-pink-500" />
-                            <div className="w-full">
-                                <p className="text-xs text-zinc-500 uppercase tracking-wider">Born</p>
-                                {isEditing ? (
-                                    <input
-                                        type="date"
-                                        name="dob"
-                                        value={editData.dob}
-                                        onChange={handleChange}
-                                        className="w-full bg-zinc-800 rounded p-1 text-white text-sm"
-                                    />
-                                ) : (
-                                    <p>{member.dob || '-'}</p>
-                                )}
-                            </div>
-                        </div>
-
-                        {isEditing && (
-                            <div className="flex items-center gap-3 text-zinc-300">
-                                <Instagram size={18} className="text-purple-500" />
-                                <div className="w-full">
-                                    <p className="text-xs text-zinc-500 uppercase tracking-wider">Instagram</p>
-                                    <input
-                                        type="text"
-                                        name="instagram"
-                                        value={editData.instagram}
-                                        onChange={handleChange}
-                                        className="w-full bg-zinc-800 rounded p-1 text-white text-sm"
-                                        placeholder="@username"
-                                    />
-                                </div>
-                            </div>
+                        ) : (
+                            member.instagram && (
+                                <a
+                                    href={member.instagram.startsWith('http') ? member.instagram : `https://instagram.com/${member.instagram.replace('@', '')}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="mt-6 flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl font-semibold transition-all shadow-lg shadow-purple-900/20"
+                                >
+                                    <Instagram size={20} />
+                                    Visit Instagram
+                                </a>
+                            )
                         )}
                     </div>
+                </motion.div>
+            </>
+            )
+    }
 
-                    {isEditing ? (
-                        <div className="mt-6 flex gap-2">
-                            <button
-                                onClick={() => setIsEditing(false)}
-                                className="flex-1 py-3 bg-zinc-700 hover:bg-zinc-600 text-white rounded-xl font-semibold transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleSave}
-                                disabled={uploading}
-                                className="flex-1 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {uploading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                                {uploading ? 'Saving...' : 'Save'}
-                            </button>
-                        </div>
-                    ) : (
-                        member.instagram && (
-                            <a
-                                href={member.instagram.startsWith('http') ? member.instagram : `https://instagram.com/${member.instagram.replace('@', '')}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="mt-6 flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl font-semibold transition-all shadow-lg shadow-purple-900/20"
-                            >
-                                <Instagram size={20} />
-                                Visit Instagram
-                            </a>
-                        )
-                    )}
-                </div>
-            </motion.div>
-        </motion.div >
-    )
-}
+            const AddMemberModal = ({onClose, onAdd}) => {
+        const [formData, setFormData] = useState({
+                name: '',
+            nim: '',
+            dob: '',
+            instagram: '',
+            photo: ''
+        })
+            const [uploading, setUploading] = useState(false)
+            const [selectedFile, setSelectedFile] = useState(null)
 
-const AddMemberModal = ({ onClose, onAdd }) => {
-    const [formData, setFormData] = useState({
-        name: '',
-        nim: '',
-        dob: '',
-        instagram: '',
-        photo: ''
-    })
-    const [uploading, setUploading] = useState(false)
-    const [selectedFile, setSelectedFile] = useState(null)
-
-    const handleSubmit = async (e) => {
-        e.preventDefault()
-        try {
-            setUploading(true)
-            let photoUrl = formData.photo
+        const handleSubmit = async (e) => {
+                e.preventDefault()
+            try {
+                setUploading(true)
+                let photoUrl = formData.photo
 
             if (selectedFile) {
                 photoUrl = await uploadImage(selectedFile)
@@ -741,134 +732,135 @@ const AddMemberModal = ({ onClose, onAdd }) => {
             const newMember = {
                 ...formData,
                 photo: photoUrl
-                // ID handled by Supabase
-            }
+                    // ID handled by Supabase
+                }
             onAdd(newMember)
-        } catch (error) {
-            alert('Failed to add member: ' + error.message)
-        } finally {
-            setUploading(false)
+            } catch (error) {
+                alert('Failed to add member: ' + error.message)
+            } finally {
+                setUploading(false)
+            }
         }
-    }
 
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value })
-    }
+        const handleChange = (e) => {
+                setFormData({ ...formData, [e.target.name]: e.target.value })
+            }
 
-    const handleFileChange = (e) => {
-        if (e.target.files && e.target.files[0]) {
-            setSelectedFile(e.target.files[0])
+        const handleFileChange = (e) => {
+            if (e.target.files && e.target.files[0]) {
+                const file = e.target.files[0]
+            setSelectedFile(file)
             // Just for preview if needed, or update formData.photo with object URL
-            setFormData({ ...formData, photo: URL.createObjectURL(e.target.files[0]) })
+            setFormData({...formData, photo: URL.createObjectURL(file) })
+            }
         }
-    }
 
-    return (
-        <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-            onClick={onClose}
-        >
+            return (
             <motion.div
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 20, opacity: 0 }}
-                className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative"
-                onClick={e => e.stopPropagation()}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+                onClick={onClose}
             >
-                <button
-                    onClick={onClose}
-                    className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
+                <motion.div
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: 20, opacity: 0 }}
+                    className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative"
+                    onClick={e => e.stopPropagation()}
                 >
-                    <X size={20} />
-                </button>
+                    <button
+                        onClick={onClose}
+                        className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
+                    >
+                        <X size={20} />
+                    </button>
 
-                <h3 className="text-2xl font-bold text-white mb-6">Add New Member</h3>
+                    <h3 className="text-2xl font-bold text-white mb-6">Add New Member</h3>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="text-sm text-zinc-400 block mb-1">Full Name</label>
-                        <input
-                            required
-                            type="text"
-                            name="name"
-                            value={formData.name}
-                            onChange={handleChange}
-                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                            placeholder="e.g. John Doe"
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
+                    <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
-                            <label className="text-sm text-zinc-400 block mb-1">NIM</label>
+                            <label className="text-sm text-zinc-400 block mb-1">Full Name</label>
+                            <input
+                                required
+                                type="text"
+                                name="name"
+                                value={formData.name}
+                                onChange={handleChange}
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                                placeholder="e.g. John Doe"
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-sm text-zinc-400 block mb-1">NIM</label>
+                                <input
+                                    type="text"
+                                    name="nim"
+                                    value={formData.nim}
+                                    onChange={handleChange}
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                                    placeholder="12345678"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-sm text-zinc-400 block mb-1">Date of Birth</label>
+                                <input
+                                    type="date"
+                                    name="dob"
+                                    value={formData.dob}
+                                    onChange={handleChange}
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-sm text-zinc-400 block mb-1">Instagram Username/Link</label>
                             <input
                                 type="text"
-                                name="nim"
-                                value={formData.nim}
+                                name="instagram"
+                                value={formData.instagram}
                                 onChange={handleChange}
                                 className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                                placeholder="12345678"
+                                placeholder="@username"
                             />
                         </div>
+
                         <div>
-                            <label className="text-sm text-zinc-400 block mb-1">Date of Birth</label>
-                            <input
-                                type="date"
-                                name="dob"
-                                value={formData.dob}
-                                onChange={handleChange}
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                            />
+                            <label className="text-sm text-zinc-400 block mb-1">Photo</label>
+                            <div className="relative w-full h-32 bg-zinc-950 border border-zinc-800 rounded-lg flex items-center justify-center overflow-hidden group hover:border-purple-500 transition-colors">
+                                {formData.photo ? (
+                                    <img src={formData.photo} alt="Preview" className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="flex flex-col items-center text-zinc-500">
+                                        <Upload size={24} className="mb-2" />
+                                        <span className="text-xs">Click to upload</span>
+                                    </div>
+                                )}
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleFileChange}
+                                    className="absolute inset-0 opacity-0 cursor-pointer"
+                                />
+                            </div>
                         </div>
-                    </div>
 
-                    <div>
-                        <label className="text-sm text-zinc-400 block mb-1">Instagram Username/Link</label>
-                        <input
-                            type="text"
-                            name="instagram"
-                            value={formData.instagram}
-                            onChange={handleChange}
-                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                            placeholder="@username"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="text-sm text-zinc-400 block mb-1">Photo</label>
-                        <div className="relative w-full h-32 bg-zinc-950 border border-zinc-800 rounded-lg flex items-center justify-center overflow-hidden group hover:border-purple-500 transition-colors">
-                            {formData.photo ? (
-                                <img src={formData.photo} alt="Preview" className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="flex flex-col items-center text-zinc-500">
-                                    <Upload size={24} className="mb-2" />
-                                    <span className="text-xs">Click to upload</span>
-                                </div>
-                            )}
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleFileChange}
-                                className="absolute inset-0 opacity-0 cursor-pointer"
-                            />
-                        </div>
-                    </div>
-
-                    <button
-                        type="submit"
-                        disabled={uploading}
-                        className="w-full py-3 mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-lg font-bold transition-all shadow-lg shadow-purple-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                        {uploading && <Loader2 size={20} className="animate-spin" />}
-                        {uploading ? 'Uploading...' : 'Save Member'}
-                    </button>
-                </form>
+                        <button
+                            type="submit"
+                            disabled={uploading}
+                            className="w-full py-3 mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-lg font-bold transition-all shadow-lg shadow-purple-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                            {uploading && <Loader2 size={20} className="animate-spin" />}
+                            {uploading ? 'Uploading...' : 'Save Member'}
+                        </button>
+                    </form>
+                </motion.div>
             </motion.div>
-        </motion.div>
-    )
+            )
 }
 
-export default Members
+            export default Members
