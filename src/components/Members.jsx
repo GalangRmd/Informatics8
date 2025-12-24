@@ -302,51 +302,61 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
     }
 
     // Crop Image Utility
-    const getCroppedImage = async (sourceUrl, offset, zoomVal) => {
+    const getCroppedImage = async (sourceUrl, offset, zoomVal, containerSize) => {
         return new Promise((resolve, reject) => {
             const img = new Image()
             img.src = sourceUrl
             img.crossOrigin = 'anonymous'
             img.onload = () => {
                 const canvas = document.createElement('canvas')
-                const size = 300 // Output resolution
+                const size = 300 // Output resolution (Square)
                 canvas.width = size
                 canvas.height = size
                 const ctx = canvas.getContext('2d')
 
-                // Calculate render dimensions based on natural size
-                // We emulate the "min-dimension = 100%" logic of our CSS
-                const aspect = img.naturalWidth / img.naturalHeight
-                let renderW, renderH
+                // 1. Calculate how the image is rendered in the DOM Container
+                // The DOM container has size `containerSize` (e.g., 120px inner width).
+                // The CSS rules are: min-width: 100%; min-height: 100%; object-cover equivalent logic manually?
+                // Actually my CSS uses minWidth: 100%, minHeight: 100%.
+                // This means:
+                // If Aspect > 1 (Wide): Height = ContainerSize, Width = ContainerSize * Aspect
+                // If Aspect < 1 (Tall): Width = ContainerSize, Height = ContainerSize / Aspect
 
-                // The container is square. We scale the image so its smallest side hits the container size.
-                // But we print to a 300x300 canvas.
+                const aspect = img.naturalWidth / img.naturalHeight
+
+                // Base dimensions in DOM pixels (before zoom)
+                let domRenderW, domRenderH
                 if (aspect > 1) {
-                    // Wider than tall: Height = size
-                    renderH = size
-                    renderW = size * aspect
+                    domRenderH = containerSize
+                    domRenderW = containerSize * aspect
                 } else {
-                    // Taller than wide: Width = size
-                    renderW = size
-                    renderH = size / aspect
+                    domRenderW = containerSize
+                    domRenderH = containerSize / aspect
                 }
 
-                // Apply Zoom
-                renderW *= zoomVal
-                renderH *= zoomVal
+                // 2. We need to map "DOM Pixels" to "Canvas Pixels"
+                // The Scale Factor is straightforward: CanvasSize / ContainerSize
+                // Example: 300 / 120 = 2.5
+                const pixelScale = size / containerSize
 
-                // Center relative to canvas
-                let drawX = (size - renderW) / 2
-                let drawY = (size - renderH) / 2
+                // 3. Calculate Drawing Dimensions on Canvas
+                // We take the DOM dimensions, apply the zoom, then convert to Canvas pixels
+                let drawW = domRenderW * zoomVal * pixelScale
+                let drawH = domRenderH * zoomVal * pixelScale
 
-                // Apply User Translate
-                // User drag is in pixels relative to 128px container
-                // Scale offset to 300px canvas
-                const scaleFactor = size / 128
-                drawX += offset.x * scaleFactor
-                drawY += offset.y * scaleFactor
+                // 4. Calculate Center Position
+                // We want to center the image on the canvas
+                let drawX = (size - drawW) / 2
+                let drawY = (size - drawH) / 2
 
-                ctx.drawImage(img, drawX, drawY, renderW, renderH)
+                // 5. Apply User Translation
+                // The user drags in DOM pixels (offset).
+                // We scale this offset to Canvas pixels.
+                drawX += offset.x * pixelScale
+                drawY += offset.y * pixelScale
+
+                // Draw
+                ctx.drawImage(img, drawX, drawY, drawW, drawH)
 
                 canvas.toBlob((blob) => {
                     resolve(blob)
@@ -371,7 +381,13 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
             }
             else if (selectedFile || needsCrop) {
                 const source = selectedFile ? URL.createObjectURL(selectedFile) : editData.photo
-                const croppedBlob = await getCroppedImage(source, dragPos, zoom)
+
+                // Get actual container size for accuracy (border-box handling)
+                // Default to 120 (128px - 8px border) if ref missing
+                const containerSize = containerRef.current ?
+                    (containerRef.current.clientWidth) : 120
+
+                const croppedBlob = await getCroppedImage(source, dragPos, zoom, containerSize)
                 photoUrl = await uploadImage(croppedBlob)
             }
             // If just updating text and photo is existing URL -> keep it
@@ -567,7 +583,7 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
                                                 <span className="text-xs text-zinc-500">Zoom</span>
                                                 <input
                                                     type="range"
-                                                    min="1"
+                                                    min="0.5"
                                                     max="3"
                                                     step="0.05"
                                                     value={zoom}
