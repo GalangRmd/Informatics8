@@ -644,7 +644,7 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
                                         <input
                                             type="date"
                                             name="dob"
-                                            value={editData.dob}
+                                            value={editData.dob && editData.dob !== '-' ? editData.dob : ''}
                                             onChange={handleChange}
                                             className="w-full bg-zinc-800 rounded p-1 text-white text-sm"
                                         />
@@ -704,26 +704,27 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
                         )}
                     </div>
                 </motion.div>
-            </>
-            )
-    }
+            </motion.div>
+        </>
+    )
+}
 
-            const AddMemberModal = ({onClose, onAdd}) => {
-        const [formData, setFormData] = useState({
-                name: '',
-            nim: '',
-            dob: '',
-            instagram: '',
-            photo: ''
-        })
-            const [uploading, setUploading] = useState(false)
-            const [selectedFile, setSelectedFile] = useState(null)
+const AddMemberModal = ({ onClose, onAdd }) => {
+    const [formData, setFormData] = useState({
+        name: '',
+        nim: '',
+        dob: '',
+        instagram: '',
+        photo: ''
+    })
+    const [uploading, setUploading] = useState(false)
+    const [selectedFile, setSelectedFile] = useState(null)
 
-        const handleSubmit = async (e) => {
-                e.preventDefault()
-            try {
-                setUploading(true)
-                let photoUrl = formData.photo
+    const handleSubmit = async (e) => {
+        e.preventDefault()
+        try {
+            setUploading(true)
+            let photoUrl = formData.photo
 
             if (selectedFile) {
                 photoUrl = await uploadImage(selectedFile)
@@ -732,135 +733,135 @@ const MemberModal = ({ member, onClose, onDelete, onUpdate, isAdmin }) => {
             const newMember = {
                 ...formData,
                 photo: photoUrl
-                    // ID handled by Supabase
-                }
+                // ID handled by Supabase
+            }
             onAdd(newMember)
-            } catch (error) {
-                alert('Failed to add member: ' + error.message)
-            } finally {
-                setUploading(false)
-            }
+        } catch (error) {
+            alert('Failed to add member: ' + error.message)
+        } finally {
+            setUploading(false)
         }
+    }
 
-        const handleChange = (e) => {
-                setFormData({ ...formData, [e.target.name]: e.target.value })
-            }
+    const handleChange = (e) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value })
+    }
 
-        const handleFileChange = (e) => {
-            if (e.target.files && e.target.files[0]) {
-                const file = e.target.files[0]
+    const handleFileChange = (e) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0]
             setSelectedFile(file)
             // Just for preview if needed, or update formData.photo with object URL
-            setFormData({...formData, photo: URL.createObjectURL(file) })
-            }
+            setFormData({ ...formData, photo: URL.createObjectURL(file) })
         }
+    }
 
-            return (
+    return (
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={onClose}
+        >
             <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-                onClick={onClose}
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 20, opacity: 0 }}
+                className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative"
+                onClick={e => e.stopPropagation()}
             >
-                <motion.div
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: 20, opacity: 0 }}
-                    className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative"
-                    onClick={e => e.stopPropagation()}
+                <button
+                    onClick={onClose}
+                    className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
                 >
+                    <X size={20} />
+                </button>
+
+                <h3 className="text-2xl font-bold text-white mb-6">Add New Member</h3>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="text-sm text-zinc-400 block mb-1">Full Name</label>
+                        <input
+                            required
+                            type="text"
+                            name="name"
+                            value={formData.name}
+                            onChange={handleChange}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                            placeholder="e.g. John Doe"
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-sm text-zinc-400 block mb-1">NIM</label>
+                            <input
+                                type="text"
+                                name="nim"
+                                value={formData.nim}
+                                onChange={handleChange}
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                                placeholder="12345678"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-sm text-zinc-400 block mb-1">Date of Birth</label>
+                            <input
+                                type="date"
+                                name="dob"
+                                value={formData.dob}
+                                onChange={handleChange}
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-sm text-zinc-400 block mb-1">Instagram Username/Link</label>
+                        <input
+                            type="text"
+                            name="instagram"
+                            value={formData.instagram}
+                            onChange={handleChange}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                            placeholder="@username"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="text-sm text-zinc-400 block mb-1">Photo</label>
+                        <div className="relative w-full h-32 bg-zinc-950 border border-zinc-800 rounded-lg flex items-center justify-center overflow-hidden group hover:border-purple-500 transition-colors">
+                            {formData.photo ? (
+                                <img src={formData.photo} alt="Preview" className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="flex flex-col items-center text-zinc-500">
+                                    <Upload size={24} className="mb-2" />
+                                    <span className="text-xs">Click to upload</span>
+                                </div>
+                            )}
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleFileChange}
+                                className="absolute inset-0 opacity-0 cursor-pointer"
+                            />
+                        </div>
+                    </div>
+
                     <button
-                        onClick={onClose}
-                        className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
+                        type="submit"
+                        disabled={uploading}
+                        className="w-full py-3 mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-lg font-bold transition-all shadow-lg shadow-purple-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
-                        <X size={20} />
+                        {uploading && <Loader2 size={20} className="animate-spin" />}
+                        {uploading ? 'Uploading...' : 'Save Member'}
                     </button>
-
-                    <h3 className="text-2xl font-bold text-white mb-6">Add New Member</h3>
-
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div>
-                            <label className="text-sm text-zinc-400 block mb-1">Full Name</label>
-                            <input
-                                required
-                                type="text"
-                                name="name"
-                                value={formData.name}
-                                onChange={handleChange}
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                                placeholder="e.g. John Doe"
-                            />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-sm text-zinc-400 block mb-1">NIM</label>
-                                <input
-                                    type="text"
-                                    name="nim"
-                                    value={formData.nim}
-                                    onChange={handleChange}
-                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                                    placeholder="12345678"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-sm text-zinc-400 block mb-1">Date of Birth</label>
-                                <input
-                                    type="date"
-                                    name="dob"
-                                    value={formData.dob}
-                                    onChange={handleChange}
-                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                                />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="text-sm text-zinc-400 block mb-1">Instagram Username/Link</label>
-                            <input
-                                type="text"
-                                name="instagram"
-                                value={formData.instagram}
-                                onChange={handleChange}
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                                placeholder="@username"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="text-sm text-zinc-400 block mb-1">Photo</label>
-                            <div className="relative w-full h-32 bg-zinc-950 border border-zinc-800 rounded-lg flex items-center justify-center overflow-hidden group hover:border-purple-500 transition-colors">
-                                {formData.photo ? (
-                                    <img src={formData.photo} alt="Preview" className="w-full h-full object-cover" />
-                                ) : (
-                                    <div className="flex flex-col items-center text-zinc-500">
-                                        <Upload size={24} className="mb-2" />
-                                        <span className="text-xs">Click to upload</span>
-                                    </div>
-                                )}
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleFileChange}
-                                    className="absolute inset-0 opacity-0 cursor-pointer"
-                                />
-                            </div>
-                        </div>
-
-                        <button
-                            type="submit"
-                            disabled={uploading}
-                            className="w-full py-3 mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-lg font-bold transition-all shadow-lg shadow-purple-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                        >
-                            {uploading && <Loader2 size={20} className="animate-spin" />}
-                            {uploading ? 'Uploading...' : 'Save Member'}
-                        </button>
-                    </form>
-                </motion.div>
+                </form>
             </motion.div>
-            )
+        </motion.div>
+    )
 }
 
-            export default Members
+export default Members
