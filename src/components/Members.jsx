@@ -242,6 +242,13 @@ const CropModal = ({ imageSrc, onCancel, onCrop }) => {
     const [isDragging, setIsDragging] = useState(false)
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
 
+    const [imgAspect, setImgAspect] = useState(1) // Default to 1
+
+    const onImgLoad = (e) => {
+        const { naturalWidth, naturalHeight } = e.currentTarget
+        setImgAspect(naturalWidth / naturalHeight)
+    }
+
     // Touch/Mouse Handlers (Reused logic)
     const handleMouseDown = (e) => {
         e.preventDefault()
@@ -285,6 +292,7 @@ const CropModal = ({ imageSrc, onCancel, onCrop }) => {
         const pixelScale = size / PREVIEW_SIZE
 
         // Calculate Image dimensions in Preview
+        // We re-calculate aspect here to be safe and isolated
         const aspect = img.naturalWidth / img.naturalHeight
         let renderW, renderH
         if (aspect > 1) {
@@ -334,13 +342,15 @@ const CropModal = ({ imageSrc, onCancel, onCrop }) => {
                     >
                         <img
                             src={imageSrc}
+                            onLoad={onImgLoad}
                             alt="Crop Target"
                             className="absolute max-w-none pointer-events-none select-none"
                             style={{
                                 top: '50%',
                                 left: '50%',
-                                minWidth: '100%',
-                                minHeight: '100%',
+                                // Aspect Ratio Logic (Cover)
+                                width: imgAspect >= 1 ? 'auto' : '100%',
+                                height: imgAspect >= 1 ? '100%' : 'auto',
                                 transform: `translate(calc(-50% + ${dragPos.x}px), calc(-50% + ${dragPos.y}px)) scale(${zoom})`,
                             }}
                         />
