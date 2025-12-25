@@ -720,6 +720,9 @@ const AddMemberModal = ({ onClose, onAdd }) => {
     const [uploading, setUploading] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
 
+    const [showCropModal, setShowCropModal] = useState(false)
+    const [rawPhotoUrl, setRawPhotoUrl] = useState(null)
+
     const handleSubmit = async (e) => {
         e.preventDefault()
         try {
@@ -750,117 +753,137 @@ const AddMemberModal = ({ onClose, onAdd }) => {
     const handleFileChange = (e) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0]
-            setSelectedFile(file)
-            // Just for preview if needed, or update formData.photo with object URL
-            setFormData({ ...formData, photo: URL.createObjectURL(file) })
+            const url = URL.createObjectURL(file)
+            setRawPhotoUrl(url)
+            setShowCropModal(true)
         }
     }
 
+    const handleCropFinished = (croppedBlob) => {
+        const croppedUrl = URL.createObjectURL(croppedBlob)
+        setFormData({ ...formData, photo: croppedUrl })
+        setSelectedFile(croppedBlob)
+        setShowCropModal(false)
+        setRawPhotoUrl(null)
+    }
+
     return (
-        <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-            onClick={onClose}
-        >
+        <>
+            {showCropModal && rawPhotoUrl && (
+                <CropModal
+                    imageSrc={rawPhotoUrl}
+                    onCancel={() => {
+                        setShowCropModal(false)
+                        setRawPhotoUrl(null)
+                    }}
+                    onCrop={handleCropFinished}
+                />
+            )}
             <motion.div
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 20, opacity: 0 }}
-                className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative"
-                onClick={e => e.stopPropagation()}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+                onClick={onClose}
             >
-                <button
-                    onClick={onClose}
-                    className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
+                <motion.div
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: 20, opacity: 0 }}
+                    className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative"
+                    onClick={e => e.stopPropagation()}
                 >
-                    <X size={20} />
-                </button>
+                    <button
+                        onClick={onClose}
+                        className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
+                    >
+                        <X size={20} />
+                    </button>
 
-                <h3 className="text-2xl font-bold text-white mb-6">Add New Member</h3>
+                    <h3 className="text-2xl font-bold text-white mb-6">Add New Member</h3>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="text-sm text-zinc-400 block mb-1">Full Name</label>
-                        <input
-                            required
-                            type="text"
-                            name="name"
-                            value={formData.name}
-                            onChange={handleChange}
-                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                            placeholder="e.g. John Doe"
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
+                    <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
-                            <label className="text-sm text-zinc-400 block mb-1">NIM</label>
+                            <label className="text-sm text-zinc-400 block mb-1">Full Name</label>
+                            <input
+                                required
+                                type="text"
+                                name="name"
+                                value={formData.name}
+                                onChange={handleChange}
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                                placeholder="e.g. John Doe"
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-sm text-zinc-400 block mb-1">NIM</label>
+                                <input
+                                    type="text"
+                                    name="nim"
+                                    value={formData.nim}
+                                    onChange={handleChange}
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                                    placeholder="12345678"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-sm text-zinc-400 block mb-1">Date of Birth</label>
+                                <input
+                                    type="date"
+                                    name="dob"
+                                    value={formData.dob}
+                                    onChange={handleChange}
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-sm text-zinc-400 block mb-1">Instagram Username/Link</label>
                             <input
                                 type="text"
-                                name="nim"
-                                value={formData.nim}
+                                name="instagram"
+                                value={formData.instagram}
                                 onChange={handleChange}
                                 className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                                placeholder="12345678"
+                                placeholder="@username"
                             />
                         </div>
+
                         <div>
-                            <label className="text-sm text-zinc-400 block mb-1">Date of Birth</label>
-                            <input
-                                type="date"
-                                name="dob"
-                                value={formData.dob}
-                                onChange={handleChange}
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                            />
+                            <label className="text-sm text-zinc-400 block mb-1">Photo</label>
+                            <div className="relative w-full h-32 bg-zinc-950 border border-zinc-800 rounded-lg flex items-center justify-center overflow-hidden group hover:border-purple-500 transition-colors">
+                                {formData.photo ? (
+                                    <img src={formData.photo} alt="Preview" className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="flex flex-col items-center text-zinc-500">
+                                        <Upload size={24} className="mb-2" />
+                                        <span className="text-xs">Click to upload</span>
+                                    </div>
+                                )}
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleFileChange}
+                                    className="absolute inset-0 opacity-0 cursor-pointer"
+                                />
+                            </div>
                         </div>
-                    </div>
 
-                    <div>
-                        <label className="text-sm text-zinc-400 block mb-1">Instagram Username/Link</label>
-                        <input
-                            type="text"
-                            name="instagram"
-                            value={formData.instagram}
-                            onChange={handleChange}
-                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
-                            placeholder="@username"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="text-sm text-zinc-400 block mb-1">Photo</label>
-                        <div className="relative w-full h-32 bg-zinc-950 border border-zinc-800 rounded-lg flex items-center justify-center overflow-hidden group hover:border-purple-500 transition-colors">
-                            {formData.photo ? (
-                                <img src={formData.photo} alt="Preview" className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="flex flex-col items-center text-zinc-500">
-                                    <Upload size={24} className="mb-2" />
-                                    <span className="text-xs">Click to upload</span>
-                                </div>
-                            )}
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleFileChange}
-                                className="absolute inset-0 opacity-0 cursor-pointer"
-                            />
-                        </div>
-                    </div>
-
-                    <button
-                        type="submit"
-                        disabled={uploading}
-                        className="w-full py-3 mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-lg font-bold transition-all shadow-lg shadow-purple-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                        {uploading && <Loader2 size={20} className="animate-spin" />}
-                        {uploading ? 'Uploading...' : 'Save Member'}
-                    </button>
-                </form>
+                        <button
+                            type="submit"
+                            disabled={uploading}
+                            className="w-full py-3 mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-lg font-bold transition-all shadow-lg shadow-purple-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                            {uploading && <Loader2 size={20} className="animate-spin" />}
+                            {uploading ? 'Uploading...' : 'Save Member'}
+                        </button>
+                    </form>
+                </motion.div>
             </motion.div>
-        </motion.div>
+        </>
     )
 }
 
