@@ -30,10 +30,9 @@ const AdminDashboard = () => {
 
     const fetchAdmins = async () => {
         try {
+            // Updated to fetch from auth.users via RPC
             const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .order('created_at', { ascending: false });
+                .rpc('get_auth_users');
 
             if (error) throw error;
             setAdmins(data || []);
