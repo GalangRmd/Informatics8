@@ -21,6 +21,7 @@ const AdminDashboard = () => {
     // Admin List State
     const [admins, setAdmins] = useState([]);
     const [loadingAdmins, setLoadingAdmins] = useState(true);
+    const [fetchError, setFetchError] = useState(null);
     const [deleteCandidate, setDeleteCandidate] = useState(null);
 
     // Change Password State
@@ -29,15 +30,19 @@ const AdminDashboard = () => {
     const [isUpdatingPass, setIsUpdatingPass] = useState(false);
 
     const fetchAdmins = async () => {
+        setLoadingAdmins(true);
+        setFetchError(null);
         try {
             // Updated to fetch from auth.users via RPC
             const { data, error } = await supabase
                 .rpc('get_auth_users');
 
             if (error) throw error;
+            console.log("Fetched Admins:", data);
             setAdmins(data || []);
         } catch (error) {
-            console.error("Error fetching admins:", error.message);
+            console.error("Error fetching admins:", error);
+            setFetchError(error.message);
         } finally {
             setLoadingAdmins(false);
         }
@@ -262,8 +267,15 @@ const AdminDashboard = () => {
                         <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 max-h-[300px]">
                             {loadingAdmins ? (
                                 <p className="text-gray-500 text-center py-4">Loading list...</p>
+                            ) : fetchError ? (
+                                <div className="text-red-400 text-center py-4 bg-red-500/10 rounded-xl border border-red-500/20">
+                                    <p className="font-bold">Error loading admins</p>
+                                    <p className="text-sm opacity-80">{fetchError}</p>
+                                    <p className="text-xs mt-2 text-gray-400">Did you run the SQL script?</p>
+                                    <button onClick={fetchAdmins} className="mt-2 text-xs underline hover:text-white">Retry</button>
+                                </div>
                             ) : admins.length === 0 ? (
-                                <p className="text-gray-500 text-center py-4">No admins found (Requires 'profiles' table).</p>
+                                <p className="text-gray-500 text-center py-4">No users found.</p>
                             ) : (
                                 <div className="space-y-3">
                                     {admins.map((admin) => (
