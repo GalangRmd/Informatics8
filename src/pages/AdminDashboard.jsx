@@ -72,10 +72,9 @@ const AdminDashboard = () => {
         if (!deleteCandidate) return;
 
         try {
+            // Updated to delete from auth.users via RPC
             const { error } = await supabase
-                .from('profiles')
-                .delete()
-                .eq('id', deleteCandidate.id);
+                .rpc('delete_auth_user', { user_id: deleteCandidate.id });
 
             if (error) throw error;
 
@@ -275,7 +274,10 @@ const AdminDashboard = () => {
                                                 </div>
                                                 <div className="overflow-hidden">
                                                     <p className="font-medium truncate text-sm">{admin.email}</p>
-                                                    <p className="text-xs text-gray-500">Joined: {new Date(admin.created_at).toLocaleDateString()}</p>
+                                                    <p className="text-xs text-gray-500">
+                                                        Joined: {new Date(admin.created_at).toLocaleDateString()}
+                                                        {admin.last_sign_in_at && ` • Last seen: ${new Date(admin.last_sign_in_at).toLocaleDateString()}`}
+                                                    </p>
                                                 </div>
                                             </div>
                                             {/* Delete Button */}
