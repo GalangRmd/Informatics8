@@ -5,7 +5,8 @@ import Contact from '../components/Contact'
 
 function Home() {
     return (
-        <div className="bg-black min-h-screen text-white">
+        <div className="bg-black min-h-screen text-white relative">
+            <div className="noise-bg"></div>
             <Hero />
             <About />
             <Members />
